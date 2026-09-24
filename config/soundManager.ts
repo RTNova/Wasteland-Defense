@@ -240,28 +240,74 @@ class SoundManager {
     osc.stop(now + 0.5);
   }
 
-  // Enemy kill / hit sound
+  // Enemy kill / hit sound - Creamy, velvety ASMR pop & squish sound
   public playEnemyKilled() {
     if (this.settings.sfxMuted) return;
     this.initContext();
     if (!this.ctx || !this.sfxGainNode) return;
 
     const now = this.ctx.currentTime;
-    const osc = this.ctx.createOscillator();
-    const gain = this.ctx.createGain();
 
-    osc.type = 'square';
-    osc.frequency.setValueAtTime(140, now);
-    osc.frequency.exponentialRampToValueAtTime(40, now + 0.08);
+    // Component 1: Creamy warm water droplet/bubble "pop" (Sine sweeping down smoothly through low-pass warmth)
+    const popOsc = this.ctx.createOscillator();
+    const popGain = this.ctx.createGain();
+    const popFilter = this.ctx.createBiquadFilter();
 
-    gain.gain.setValueAtTime(0.12, now);
-    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.08);
+    popOsc.type = 'sine';
+    // Gentle ASMR acoustic pitch curve: starts at a pleasant warm 580Hz and slides down into a velvety 180Hz
+    popOsc.frequency.setValueAtTime(580, now);
+    popOsc.frequency.exponentialRampToValueAtTime(180, now + 0.08);
 
-    osc.connect(gain);
-    gain.connect(this.sfxGainNode);
+    popFilter.type = 'lowpass';
+    popFilter.frequency.setValueAtTime(1400, now);
+    popFilter.frequency.exponentialRampToValueAtTime(320, now + 0.12);
+    popFilter.Q.setValueAtTime(2.5, now); // Creamy acoustic body resonance
 
-    osc.start(now);
-    osc.stop(now + 0.08);
+    popGain.gain.setValueAtTime(0.001, now);
+    popGain.gain.linearRampToValueAtTime(0.35, now + 0.008); // Soft non-click onset
+    popGain.gain.exponentialRampToValueAtTime(0.001, now + 0.11);
+
+    popOsc.connect(popFilter);
+    popFilter.connect(popGain);
+    popGain.connect(this.sfxGainNode);
+
+    popOsc.start(now);
+    popOsc.stop(now + 0.12);
+
+    // Component 2: Soft sub-bass resonant thud (gives that tactile ASMR "squish/plop" sensation in the ears)
+    const subOsc = this.ctx.createOscillator();
+    const subGain = this.ctx.createGain();
+
+    subOsc.type = 'sine';
+    subOsc.frequency.setValueAtTime(120, now);
+    subOsc.frequency.exponentialRampToValueAtTime(45, now + 0.14);
+
+    subGain.gain.setValueAtTime(0.28, now);
+    subGain.gain.exponentialRampToValueAtTime(0.001, now + 0.14);
+
+    subOsc.connect(subGain);
+    subGain.connect(this.sfxGainNode);
+
+    subOsc.start(now);
+    subOsc.stop(now + 0.15);
+
+    // Component 3: Sparkly velvety harmonic overtone for satisfying completion
+    const harmonicOsc = this.ctx.createOscillator();
+    const harmonicGain = this.ctx.createGain();
+
+    harmonicOsc.type = 'triangle';
+    harmonicOsc.frequency.setValueAtTime(880, now + 0.01);
+    harmonicOsc.frequency.exponentialRampToValueAtTime(440, now + 0.09);
+
+    harmonicGain.gain.setValueAtTime(0.001, now);
+    harmonicGain.gain.linearRampToValueAtTime(0.09, now + 0.015);
+    harmonicGain.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
+
+    harmonicOsc.connect(harmonicGain);
+    harmonicGain.connect(this.sfxGainNode);
+
+    harmonicOsc.start(now + 0.01);
+    harmonicOsc.stop(now + 0.09);
   }
 
   // Wave Victory / Debrief fanfare chime

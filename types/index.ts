@@ -199,3 +199,15 @@ export interface DragState {
   gameX: number; // Game X (800x600 space)
   gameY: number; // Game Y
 }
+
+export interface CurrencyPopup {
+  id: string;
+  x: number;
+  y: number;
+  amount: number;
+  lifespan: number;     // e.g. 50 frames
+  maxLifespan: number;  // total duration
+  vy: number;           // upward float velocity
+  vx: number;           // slight horizontal drift
+}
+

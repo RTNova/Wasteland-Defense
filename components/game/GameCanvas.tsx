@@ -1,6 +1,6 @@
 
 import React, { useEffect, useRef, useState } from 'react';
-import { Enemy, Tower, Projectile, GameMap, EnemyType, TowerType, Point, GlobalUpgrades, DragState, GroundEffect } from '../../types/index';
+import { Enemy, Tower, Projectile, GameMap, EnemyType, TowerType, Point, GlobalUpgrades, DragState, GroundEffect, CurrencyPopup } from '../../types/index';
 import { CANVAS_HEIGHT, CANVAS_WIDTH, ENEMY_STATS, TOWER_DEFINITIONS, generateWaves } from '../../config/constants';
 import { Heart, Zap, Crosshair, Play, Pause, LogOut, FastForward, Repeat, ArrowUp, Terminal, Skull, Minimize2, Maximize2, Sword, Infinity as InfinityIcon, BarChart3, CheckCircle2 } from 'lucide-react';
 import { drawTower, drawEnemy, drawProjectile, drawGroundEffect } from './RenderUtils';
@@ -116,6 +116,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   const towersRef = useRef<Tower[]>([]);
   const projectilesRef = useRef<Projectile[]>([]);
   const groundEffectsRef = useRef<GroundEffect[]>([]); 
+  const currencyPopupsRef = useRef<CurrencyPopup[]>([]);
   const livesRef = useRef<number>(100); 
   const frameRef = useRef<number>(0);
   const requestRef = useRef<number>(0);
@@ -547,6 +548,20 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
 
       soundManager.playEnemyKilled();
 
+      // Spawn currency popup floating upward in green
+      if (enemy.reward > 0) {
+        currencyPopupsRef.current.push({
+          id: Math.random().toString(),
+          x: enemy.x,
+          y: enemy.y - 10,
+          amount: enemy.reward,
+          lifespan: 54, // ~0.9s at 60fps
+          maxLifespan: 54,
+          vy: -1.1,     // Smooth float upward
+          vx: (Math.random() - 0.5) * 0.5 // subtle drift
+        });
+      }
+
       waveStatsRef.current.enemiesDefeated++;
       totalStatsRef.current.enemiesDefeated++;
 
@@ -641,6 +656,15 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
         }
     });
     groundEffectsRef.current = groundEffectsRef.current.filter(g => g.lifespan > 0);
+
+    // Update Currency Popups (Float upward with slight deceleration, lifespan tick)
+    currencyPopupsRef.current.forEach(popup => {
+        popup.x += popup.vx;
+        popup.y += popup.vy;
+        popup.vy *= 0.98; // gentle float deceleration
+        popup.lifespan--;
+    });
+    currencyPopupsRef.current = currencyPopupsRef.current.filter(p => p.lifespan > 0);
 
     if (waveActiveRef.current) {
         if (spawnQueueRef.current.length > 0) {
@@ -1551,6 +1575,54 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     towersRef.current.forEach(t => drawTower({ctx, frame: frameRef.current}, t));
     enemiesRef.current.forEach(e => drawEnemy({ctx, frame: frameRef.current}, e));
     projectilesRef.current.forEach(p => drawProjectile({ctx, frame: frameRef.current}, p, enemiesRef.current));
+
+    // 6.5 Floating Currency Popups (Fade-in, float up, fade-out in vibrant green)
+    if (currencyPopupsRef.current.length > 0) {
+        ctx.save();
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        
+        currencyPopupsRef.current.forEach(popup => {
+            const age = popup.maxLifespan - popup.lifespan; // frames elapsed
+            
+            // Fade In during first 8 frames, stay full, Fade Out during last 18 frames
+            let alpha = 1.0;
+            const fadeInFrames = 8;
+            const fadeOutFrames = 18;
+
+            if (age < fadeInFrames) {
+                alpha = age / fadeInFrames;
+            } else if (popup.lifespan < fadeOutFrames) {
+                alpha = popup.lifespan / fadeOutFrames;
+            }
+
+            // Gentle scale effect on spawn (starts slightly scaled up then settles)
+            const scale = age < 8 ? 1.0 + (1 - age / 8) * 0.35 : 1.0;
+
+            ctx.save();
+            ctx.translate(popup.x, popup.y);
+            ctx.scale(scale, scale);
+            ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
+
+            // Green glow backdrop
+            ctx.font = '900 15px "Courier New", monospace';
+            ctx.shadowColor = 'rgba(34, 197, 94, 0.9)'; // emerald-500 neon glow
+            ctx.shadowBlur = 8;
+
+            // Dark outline for high readability on any map background
+            ctx.strokeStyle = 'rgba(0, 20, 5, 0.95)';
+            ctx.lineWidth = 3.5;
+            ctx.lineJoin = 'round';
+            ctx.strokeText(`+$${popup.amount}`, 0, 0);
+
+            // Bright vivid neon green text fill
+            ctx.fillStyle = '#4ade80'; // Emerald/Lime bright green
+            ctx.fillText(`+$${popup.amount}`, 0, 0);
+
+            ctx.restore();
+        });
+        ctx.restore();
+    }
 
     // 7. Drifting Fog Layer
     fogRef.current.forEach(f => {
