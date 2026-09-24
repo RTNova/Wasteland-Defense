@@ -1,5 +1,5 @@
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { GameCanvas } from './components/game/GameCanvas';
 import { UPGRADE_CONFIG } from './config/constants';
 import { GameMap, PlayerProgress, GlobalUpgrades, Profile } from './types/index';
@@ -10,6 +10,7 @@ import { MapSelection } from './components/ui/MapSelection';
 import { Bestiary } from './components/ui/Bestiary';
 import { ProfileSelection } from './components/ui/ProfileSelection';
 import { SoundSettingsPanel } from './components/ui/SoundSettingsPanel';
+import { SaveToast } from './components/ui/SaveToast';
 import { soundManager, SoundSettings } from './config/soundManager';
 
 const INITIAL_PROGRESS: PlayerProgress = {
@@ -40,6 +41,19 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [isDevMode, setIsDevMode] = useState(false);
   const [soundSettings, setSoundSettings] = useState<SoundSettings>(() => soundManager.getSettings());
+  const [showSaveToast, setShowSaveToast] = useState(false);
+  const saveToastTimeoutRef = useRef<any>(null);
+  const initialLoadDoneRef = useRef(false);
+
+  const triggerSaveNotification = () => {
+    setShowSaveToast(true);
+    if (saveToastTimeoutRef.current) {
+      clearTimeout(saveToastTimeoutRef.current);
+    }
+    saveToastTimeoutRef.current = setTimeout(() => {
+      setShowSaveToast(false);
+    }, 2200);
+  };
 
   // --- EFFECTS ---
   
@@ -88,7 +102,7 @@ function App() {
     }
   }, [profiles, loading]);
 
-  // Sync current progress to the active profile object
+  // Sync current progress to the active profile object & display subtle Game Saved toast
   useEffect(() => {
       if (currentProfileId && !loading) {
           setProfiles(prev => prev.map(p => 
@@ -96,6 +110,13 @@ function App() {
               ? { ...p, progress, lastPlayed: Date.now() } 
               : p
           ));
+
+          // If this is an update during play/upgrades (not the very first profile switch load)
+          if (initialLoadDoneRef.current) {
+              triggerSaveNotification();
+          } else {
+              initialLoadDoneRef.current = true;
+          }
       }
   }, [progress]);
 
@@ -117,6 +138,7 @@ function App() {
   const handleSelectProfile = (id: string) => {
       const profile = profiles.find(p => p.id === id);
       if (profile) {
+          initialLoadDoneRef.current = false;
           setCurrentProfileId(id);
           setProgress(profile.progress);
           setView('MENU');
@@ -184,6 +206,7 @@ function App() {
 
   if (activeMap) {
     return (
+      <>
         <GameCanvas 
             map={activeMap} 
             upgrades={progress.upgrades}
@@ -194,6 +217,8 @@ function App() {
             isDevMode={isDevMode}
             initialIsEndless={gameMode === 'ENDLESS'}
         />
+        <SaveToast show={showSaveToast} />
+      </>
     );
   }
 
@@ -268,6 +293,9 @@ function App() {
             />
         )}
       </div>
+
+      {/* Subtle Game Saved Toast */}
+      <SaveToast show={showSaveToast} />
     </div>
   );
 }
