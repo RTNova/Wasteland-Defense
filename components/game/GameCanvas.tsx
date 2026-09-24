@@ -9,6 +9,7 @@ import { GameMenuModal } from '../ui/GameMenuModal';
 import { soundManager, SoundSettings } from '../../config/soundManager';
 import { SoundSettingsPanel } from '../ui/SoundSettingsPanel';
 import { getDifficultyConfig } from '../../config/difficulty';
+import { getEndlessScaling } from '../../config/endlessScaling';
 
 // --- SUB-COMPONENT: TOWER PREVIEW ---
 const TowerPreview: React.FC<{ type: TowerType }> = ({ type }) => {
@@ -202,6 +203,12 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   const [gameOver, setGameOver] = useState(false);
   const [victory, setVictory] = useState(false);
   const [isEndless, setIsEndless] = useState(initialIsEndless);
+  const isEndlessRef = useRef(initialIsEndless);
+
+  useEffect(() => {
+    isEndlessRef.current = isEndless;
+  }, [isEndless]);
+
   const [isPaused, setIsPaused] = useState(false);
   const [hoveredTowerType, setHoveredTowerType] = useState<TowerType | null>(null);
   const [notification, setNotification] = useState<{text: string, opacity: number} | null>(null);
@@ -447,8 +454,17 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     const stats = ENEMY_STATS[type];
     const start = map.path[0];
     const waveNum = Math.max(1, wave);
-    const hpMultiplier = 1 + (Math.pow(waveNum - 1, 1.6) / 12);
-    const rewardMultiplier = 1 + (Math.pow(waveNum, 0.4) * 0.1);
+    const activeIsEndless = isEndlessRef.current;
+
+    // Base difficulty multiplier from campaign/wave curve
+    const baseHpMultiplier = 1 + (Math.pow(waveNum - 1, 1.6) / 12);
+
+    // Dynamic Endless Mode Health and Speed scaling based on current wave number
+    const endlessScaling = getEndlessScaling(waveNum, activeIsEndless);
+    const hpMultiplier = baseHpMultiplier * endlessScaling.hpMultiplier;
+    const scaledSpeed = Number((stats.speed * endlessScaling.speedMultiplier).toFixed(2));
+
+    const rewardMultiplier = 1 + (Math.pow(waveNum, 0.4) * 0.1) * (activeIsEndless ? (1 + (waveNum * 0.025)) : 1);
     const scaledHP = Math.round(stats.hp * hpMultiplier * diffConfig.healthMultiplier);
     const scaledReward = Math.round(stats.reward * rewardMultiplier);
 
@@ -459,7 +475,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       y: start.y,
       health: scaledHP,
       maxHealth: scaledHP,
-      speed: stats.speed,
+      speed: scaledSpeed,
       pathIndex: 0,
       distanceTraveled: 0,
       reward: scaledReward,
@@ -477,15 +493,23 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       healingReduction: 0,
       poisonDoT: 0,
       vulnerable: 0,
-      armorBroken: false
+      armorBroken: false,
+      endlessHpScale: activeIsEndless ? endlessScaling.hpMultiplier : undefined,
+      endlessSpeedScale: activeIsEndless ? endlessScaling.speedMultiplier : undefined
     });
   };
 
   const spawnMinions = (parent: Enemy, spawnType: EnemyType, count: number) => {
       const stats = ENEMY_STATS[spawnType];
       const waveNum = Math.max(1, wave);
-      const hpMultiplier = 1 + (Math.pow(waveNum - 1, 1.6) / 12);
-      const rewardMultiplier = 1 + (Math.pow(waveNum, 0.4) * 0.1);
+      const activeIsEndless = isEndlessRef.current;
+
+      const baseHpMultiplier = 1 + (Math.pow(waveNum - 1, 1.6) / 12);
+      const endlessScaling = getEndlessScaling(waveNum, activeIsEndless);
+      const hpMultiplier = baseHpMultiplier * endlessScaling.hpMultiplier;
+      const scaledSpeed = Number((stats.speed * endlessScaling.speedMultiplier).toFixed(2));
+
+      const rewardMultiplier = 1 + (Math.pow(waveNum, 0.4) * 0.1) * (activeIsEndless ? (1 + (waveNum * 0.025)) : 1);
       const scaledHP = Math.round(stats.hp * hpMultiplier * diffConfig.healthMultiplier);
       const scaledReward = Math.round(stats.reward * rewardMultiplier);
 
@@ -498,7 +522,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
               y: parent.y + offset,
               health: scaledHP,
               maxHealth: scaledHP,
-              speed: stats.speed,
+              speed: scaledSpeed,
               pathIndex: parent.pathIndex,
               distanceTraveled: parent.distanceTraveled,
               reward: scaledReward,
@@ -513,7 +537,9 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
               burnDamage: 0,
               healingReduction: 0,
               poisonDoT: 0,
-              vulnerable: 0
+              vulnerable: 0,
+              endlessHpScale: activeIsEndless ? endlessScaling.hpMultiplier : undefined,
+              endlessSpeedScale: activeIsEndless ? endlessScaling.speedMultiplier : undefined
           });
       }
   };
@@ -865,6 +891,15 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
             waveDamageDealt: waveStatsRef.current.damageDealt,
 
             mvpTower,
+            endlessScaling: isEndless ? {
+              currentHpMultiplier: getEndlessScaling(waveNumJustFinished, true).hpMultiplier,
+              currentSpeedMultiplier: getEndlessScaling(waveNumJustFinished, true).speedMultiplier,
+              nextWaveHpPercent: getEndlessScaling(waveNumJustFinished + 1, true).bonusHpPercent,
+              nextWaveSpeedPercent: getEndlessScaling(waveNumJustFinished + 1, true).bonusSpeedPercent,
+              threatTier: getEndlessScaling(waveNumJustFinished + 1, true).threatTier,
+              threatLabel: getEndlessScaling(waveNumJustFinished + 1, true).threatLabel,
+              threatColor: getEndlessScaling(waveNumJustFinished + 1, true).threatColor,
+            } : undefined,
           };
 
           setWaveSummary(summaryData);
@@ -2183,6 +2218,20 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
                 {isEndless ? <InfinityIcon className="w-4 h-4" /> : <Crosshair className="w-4 h-4" />}
                 <span>Wave {wave} {isEndless ? '(∞)' : `/ ${map.waves}`}</span>
             </div>
+            {isEndless && (() => {
+              const endlessScale = getEndlessScaling(wave, true);
+              return (
+                <div 
+                  className="bg-purple-950/90 border border-purple-500/70 px-3 py-1 rounded flex items-center gap-1.5 font-bold text-xs lg:text-sm shadow-[0_0_15px_rgba(168,85,247,0.35)] backdrop-blur-sm pointer-events-auto cursor-help transition-transform hover:scale-105"
+                  title={`Endless Mode Dynamic Escalation (Wave ${wave}):\n• Mutant Health: x${endlessScale.hpMultiplier} (+${endlessScale.bonusHpPercent}% HP)\n• Mutant Movement Speed: x${endlessScale.speedMultiplier} (+${endlessScale.bonusSpeedPercent}% SPD)\n• Threat Tier: ${endlessScale.threatTier} (${endlessScale.threatLabel})\n\nHealth and speed scale dynamically every wave!`}
+                >
+                  <Skull className="w-3.5 h-3.5 text-purple-400 animate-pulse shrink-0" />
+                  <span className="text-purple-300 font-mono tracking-tight">
+                    ENDLESS TIER {endlessScale.threatTier}: <span className="text-rose-400">+{endlessScale.bonusHpPercent}% HP</span> • <span className="text-sky-400">+{endlessScale.bonusSpeedPercent}% SPD</span>
+                  </span>
+                </div>
+              );
+            })()}
             <div className={`bg-neutral-900/90 border ${diffConfig.badgeBorder} px-3 py-1 rounded flex items-center gap-1.5 font-bold text-xs lg:text-sm shadow-lg backdrop-blur-sm ${diffConfig.badgeText}`} title={`Difficulty: ${diffConfig.name} (${diffConfig.healthMultiplier}x Mutant HP, ${diffConfig.densityMultiplier}x Wave Density, +${diffConfig.techPointReward} TP Completion Bounty)`}>
                 <ShieldAlert className="w-3.5 h-3.5" />
                 <span>{diffConfig.name.toUpperCase()} ({diffConfig.healthMultiplier}x HP)</span>

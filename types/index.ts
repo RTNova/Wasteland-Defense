@@ -67,6 +67,9 @@ export interface Enemy {
   poisonDoT?: number; // % of Max Health per second (Chemist Lvl 4)
   vulnerable?: number; // Frames vulnerable (+15% dmg)
   armorBroken?: boolean; // Permanent damage increase taken
+  // Endless Scaling Multipliers
+  endlessHpScale?: number; // Wave-based dynamic HP scale
+  endlessSpeedScale?: number; // Wave-based dynamic speed scale
 }
 
 export interface Tower {

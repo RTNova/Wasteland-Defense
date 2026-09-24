@@ -695,6 +695,22 @@ export const drawEnemy = ({ ctx, frame }: DrawContext, enemy: Enemy) => {
              ctx.fill();
         }
         ctx.globalAlpha = 1;
+    } else if (enemy.endlessSpeedScale && enemy.endlessSpeedScale > 1.1) {
+        // Dynamic Endless Mode Speed Wake
+        const wakeIntensity = Math.min(0.4, (enemy.endlessSpeedScale - 1) * 0.35);
+        ctx.save();
+        ctx.globalAlpha = wakeIntensity;
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc(x - (enemy.speed * 2), y, radius * 0.8, 0, Math.PI * 2);
+        ctx.fill();
+        if (enemy.endlessSpeedScale > 1.35) {
+            ctx.globalAlpha = wakeIntensity * 0.5;
+            ctx.beginPath();
+            ctx.arc(x - (enemy.speed * 4), y, radius * 0.55, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        ctx.restore();
     }
 
     // 2. BURN EFFECT (Base Flames + Rising Ember Sparks)
@@ -882,8 +898,8 @@ export const drawEnemy = ({ ctx, frame }: DrawContext, enemy: Enemy) => {
     else if (hpPct > 0.2 && !enemy.poisonDoT) ctx.fillStyle = '#eab308';
     
     ctx.fillRect(x - barW/2, barY, barW * hpPct, barH);
-    ctx.strokeStyle = '#000';
-    ctx.lineWidth = 1;
+    ctx.strokeStyle = (enemy.endlessHpScale && enemy.endlessHpScale > 1.2) ? '#c084fc' : '#000';
+    ctx.lineWidth = (enemy.endlessHpScale && enemy.endlessHpScale > 1.2) ? 1.5 : 1;
     ctx.strokeRect(x - barW/2, barY, barW, barH);
 
     // --- RENDER VISUAL STATUS EFFECT INDICATORS (BURNING, FROZEN, SLOWED, POISON, VULNERABLE, ARMOR BROKEN) ABOVE MUTANT ---

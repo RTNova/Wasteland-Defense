@@ -48,6 +48,17 @@ export interface WaveSummaryData {
     level: number;
     damageThisWave: number;
   };
+
+  // Endless Dynamic Scaling
+  endlessScaling?: {
+    currentHpMultiplier: number;
+    currentSpeedMultiplier: number;
+    nextWaveHpPercent: number;
+    nextWaveSpeedPercent: number;
+    threatTier: number;
+    threatLabel: string;
+    threatColor?: string;
+  };
 }
 
 interface PostWaveSummaryModalProps {
@@ -381,6 +392,42 @@ export const PostWaveSummaryModal: React.FC<PostWaveSummaryModalProps> = ({
             </div>
 
           </div>
+
+          {/* Endless Mode Dynamic Scaling Directive */}
+          {summary.isEndless && summary.endlessScaling && (
+            <div className="bg-gradient-to-r from-purple-950/70 via-neutral-900/90 to-purple-950/70 border border-purple-600/50 p-3.5 rounded-lg flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-lg shadow-purple-950/30">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-lg bg-purple-900/40 border border-purple-500/40 text-purple-400 shrink-0">
+                  <Skull className="w-5 h-5 text-purple-400" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold uppercase tracking-wider text-purple-300">
+                      Endless Escalation • Threat Tier {summary.endlessScaling.threatTier}
+                    </span>
+                    <span className="text-[10px] px-2 py-0.5 rounded font-mono font-bold uppercase bg-purple-900/60 border border-purple-600/60 text-purple-200">
+                      {summary.endlessScaling.threatLabel}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-neutral-300 mt-0.5">
+                    Mutant health and movement speed are actively accelerating with each wave.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 self-stretch sm:self-auto bg-neutral-950/80 px-3 py-2 rounded border border-purple-800/40 font-mono text-xs justify-around sm:justify-end">
+                <div className="text-center sm:text-right">
+                  <div className="text-[9px] uppercase text-neutral-400">Incoming Health</div>
+                  <div className="font-bold text-rose-400">+{summary.endlessScaling.nextWaveHpPercent}% HP</div>
+                </div>
+                <div className="w-px h-6 bg-neutral-800 mx-1" />
+                <div className="text-center sm:text-right">
+                  <div className="text-[9px] uppercase text-neutral-400">Incoming Speed</div>
+                  <div className="font-bold text-sky-400">+{summary.endlessScaling.nextWaveSpeedPercent}% SPD</div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Endless or Final Wave Notice */}
           {summary.isFinalWave && !summary.isEndless && (
