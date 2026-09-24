@@ -1,12 +1,13 @@
 
 import React, { useEffect, useRef, useState } from 'react';
-import { Enemy, Tower, Projectile, GameMap, EnemyType, TowerType, Point, GlobalUpgrades, DragState, GroundEffect, CurrencyPopup } from '../../types/index';
+import { Enemy, Tower, Projectile, GameMap, EnemyType, TowerType, Point, GlobalUpgrades, DragState, GroundEffect, CurrencyPopup, DifficultyLevel } from '../../types/index';
 import { CANVAS_HEIGHT, CANVAS_WIDTH, ENEMY_STATS, TOWER_DEFINITIONS, generateWaves } from '../../config/constants';
-import { Heart, Zap, Crosshair, Play, Pause, LogOut, FastForward, Repeat, ArrowUp, Terminal, Skull, Minimize2, Maximize2, Sword, Infinity as InfinityIcon, BarChart3, CheckCircle2 } from 'lucide-react';
+import { Heart, Zap, Crosshair, Play, Pause, LogOut, FastForward, Repeat, ArrowUp, Terminal, Skull, Minimize2, Maximize2, Sword, Infinity as InfinityIcon, BarChart3, CheckCircle2, ShieldAlert } from 'lucide-react';
 import { drawTower, drawEnemy, drawProjectile, drawGroundEffect } from './RenderUtils';
 import { PostWaveSummaryModal, WaveSummaryData } from '../ui/PostWaveSummaryModal';
 import { soundManager, SoundSettings } from '../../config/soundManager';
 import { SoundSettingsPanel } from '../ui/SoundSettingsPanel';
+import { getDifficultyConfig } from '../../config/difficulty';
 
 // --- SUB-COMPONENT: TOWER PREVIEW ---
 const TowerPreview: React.FC<{ type: TowerType }> = ({ type }) => {
@@ -73,8 +74,9 @@ interface GameCanvasProps {
   map: GameMap;
   upgrades: GlobalUpgrades;
   currentTechPoints?: number;
+  difficulty?: DifficultyLevel;
   onExit: () => void;
-  onWin: (reward: number) => void;
+  onWin: (reward: number, difficulty?: DifficultyLevel) => void;
   onAddGlobalPoints?: (amount: number) => void;
   onReportCombatStats?: (stats: { mutantsKilled?: number; bossesKilled?: number; wavesCleared?: number; endlessWaveRecord?: number; towersBuilt?: number; techPointsEarned?: number }) => void;
   isDevMode?: boolean;
@@ -104,6 +106,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   map, 
   upgrades, 
   currentTechPoints = 0,
+  difficulty = 'MEDIUM',
   onExit, 
   onWin, 
   onAddGlobalPoints, 
@@ -112,6 +115,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   initialIsEndless = false 
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const diffConfig = getDifficultyConfig(difficulty);
   
   // Game Logic Refs (Mutable for performance)
   const enemiesRef = useRef<Enemy[]>([]);
@@ -219,7 +223,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   const [waveSummary, setWaveSummary] = useState<WaveSummaryData | null>(null);
   const [isSummaryOpen, setIsSummaryOpen] = useState(false);
 
-  const waves = useRef(generateWaves(map.waves));
+  const waves = useRef(generateWaves(map.waves, difficulty));
 
   useEffect(() => {
     autoPlayRef.current = autoPlay;
@@ -395,7 +399,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     const waveNum = Math.max(1, wave);
     const hpMultiplier = 1 + (Math.pow(waveNum - 1, 1.6) / 12);
     const rewardMultiplier = 1 + (Math.pow(waveNum, 0.4) * 0.1);
-    const scaledHP = Math.round(stats.hp * hpMultiplier);
+    const scaledHP = Math.round(stats.hp * hpMultiplier * diffConfig.healthMultiplier);
     const scaledReward = Math.round(stats.reward * rewardMultiplier);
 
     enemiesRef.current.push({
@@ -432,7 +436,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       const waveNum = Math.max(1, wave);
       const hpMultiplier = 1 + (Math.pow(waveNum - 1, 1.6) / 12);
       const rewardMultiplier = 1 + (Math.pow(waveNum, 0.4) * 0.1);
-      const scaledHP = Math.round(stats.hp * hpMultiplier);
+      const scaledHP = Math.round(stats.hp * hpMultiplier * diffConfig.healthMultiplier);
       const scaledReward = Math.round(stats.reward * rewardMultiplier);
 
       for(let i=0; i<count; i++) {
@@ -476,27 +480,55 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
        const difficultyScaler = nextWaveNum;
        const proceduralEnemies = [];
        
-       // Always some fodder
-       proceduralEnemies.push({ type: EnemyType.RUNNER, count: Math.floor(15 + difficultyScaler * 1.5), spacing: 10 });
-       proceduralEnemies.push({ type: EnemyType.TANK, count: Math.floor(5 + difficultyScaler * 0.8), spacing: 30 });
+       // Always some fodder - scaled by difficulty density & spacing
+       proceduralEnemies.push({ 
+         type: EnemyType.RUNNER, 
+         count: Math.max(1, Math.round(Math.floor(15 + difficultyScaler * 1.5) * diffConfig.densityMultiplier)), 
+         spacing: Math.max(4, Math.round(10 * diffConfig.spacingMultiplier)) 
+       });
+       proceduralEnemies.push({ 
+         type: EnemyType.TANK, 
+         count: Math.max(1, Math.round(Math.floor(5 + difficultyScaler * 0.8) * diffConfig.densityMultiplier)), 
+         spacing: Math.max(4, Math.round(30 * diffConfig.spacingMultiplier)) 
+       });
        
        // Periodic Bosses
        if (nextWaveNum % 3 === 0) {
-           proceduralEnemies.push({ type: EnemyType.BOSS, count: Math.floor(1 + difficultyScaler / 5), spacing: 100 });
+           proceduralEnemies.push({ 
+             type: EnemyType.BOSS, 
+             count: Math.max(1, Math.round(Math.floor(1 + difficultyScaler / 5) * diffConfig.densityMultiplier)), 
+             spacing: Math.max(4, Math.round(100 * diffConfig.spacingMultiplier)) 
+           });
        }
        
        // Periodic Elites & Healers
        if (nextWaveNum % 5 === 0) {
-           proceduralEnemies.push({ type: EnemyType.MATRYOSHKA, count: Math.floor(1 + difficultyScaler / 8), spacing: 150 });
-           proceduralEnemies.push({ type: EnemyType.HEALER, count: Math.floor(2 + difficultyScaler / 6), spacing: 120 });
+           proceduralEnemies.push({ 
+             type: EnemyType.MATRYOSHKA, 
+             count: Math.max(1, Math.round(Math.floor(1 + difficultyScaler / 8) * diffConfig.densityMultiplier)), 
+             spacing: Math.max(4, Math.round(150 * diffConfig.spacingMultiplier)) 
+           });
+           proceduralEnemies.push({ 
+             type: EnemyType.HEALER, 
+             count: Math.max(1, Math.round(Math.floor(2 + difficultyScaler / 6) * diffConfig.densityMultiplier)), 
+             spacing: Math.max(4, Math.round(120 * diffConfig.spacingMultiplier)) 
+           });
        }
        
        if (nextWaveNum % 4 === 0) {
-           proceduralEnemies.push({ type: EnemyType.ICE_MAGE, count: Math.floor(2 + difficultyScaler / 8), spacing: 150 });
+           proceduralEnemies.push({ 
+             type: EnemyType.ICE_MAGE, 
+             count: Math.max(1, Math.round(Math.floor(2 + difficultyScaler / 8) * diffConfig.densityMultiplier)), 
+             spacing: Math.max(4, Math.round(150 * diffConfig.spacingMultiplier)) 
+           });
        }
        
        if (Math.random() > 0.4) {
-           proceduralEnemies.push({ type: EnemyType.NINJA, count: Math.floor(1 + difficultyScaler / 6), spacing: 100 });
+           proceduralEnemies.push({ 
+             type: EnemyType.NINJA, 
+             count: Math.max(1, Math.round(Math.floor(1 + difficultyScaler / 6) * diffConfig.densityMultiplier)), 
+             spacing: Math.max(4, Math.round(100 * diffConfig.spacingMultiplier)) 
+           });
        }
 
        waveData = {
@@ -707,15 +739,14 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
           const isBoss = waveNumJustFinished % 5 === 0;
           const isFinal = currentWaveIndexRef.current >= waves.current.length - 1 && !isEndless;
           
-          // Calculate Tech Points for this wave
-          const baseTP = Math.max(5, Math.floor(waveNumJustFinished * 1.5));
+          // Calculate Tech Points for this wave with difficulty scaling
+          const baseTP = Math.max(5, Math.floor(waveNumJustFinished * 1.5 * diffConfig.waveTechPointMultiplier));
           const livesLostThisWave = Math.max(0, waveStartingLivesRef.current - livesRef.current);
           const flawlessBonus = livesLostThisWave === 0 ? 5 : 0;
           const bossBonus = isBoss ? 15 : 0;
           let mapClearBonus = 0;
           if (isFinal) {
-            const difficultyMult = map.difficulty === 'HARD' ? 3 : map.difficulty === 'MEDIUM' ? 2 : 1;
-            mapClearBonus = 200 * difficultyMult;
+            mapClearBonus = diffConfig.techPointReward;
           }
           
           const totalWaveTP = baseTP + flawlessBonus + bossBonus + mapClearBonus;
@@ -757,7 +788,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
             isBossWave: isBoss,
             isFinalWave: isFinal,
             mapName: map.name,
-            mapDifficulty: map.difficulty,
+            mapDifficulty: diffConfig.name,
 
             enemiesDefeatedWave: waveStatsRef.current.enemiesDefeated,
             enemiesDefeatedTotal: totalStatsRef.current.enemiesDefeated,
@@ -1989,7 +2020,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
         )}
         
         {/* Floating UI Stats */}
-        <div className="absolute top-4 left-4 flex gap-4 pointer-events-none">
+        <div className="absolute top-4 left-4 flex flex-wrap gap-2 lg:gap-3 pointer-events-none">
             <div className="bg-neutral-900/90 border border-yellow-600/50 px-3 py-1 rounded flex items-center gap-2 text-yellow-500 font-bold text-sm lg:text-base shadow-lg backdrop-blur-sm">
                 <Zap className="w-4 h-4" />
                 <span>${money}</span>
@@ -2001,6 +2032,10 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
             <div className="bg-neutral-900/90 border border-blue-600/50 px-3 py-1 rounded flex items-center gap-2 text-blue-400 font-bold text-sm lg:text-base shadow-lg backdrop-blur-sm">
                 {isEndless ? <InfinityIcon className="w-4 h-4" /> : <Crosshair className="w-4 h-4" />}
                 <span>Wave {wave} {isEndless ? '(∞)' : `/ ${map.waves}`}</span>
+            </div>
+            <div className={`bg-neutral-900/90 border ${diffConfig.badgeBorder} px-3 py-1 rounded flex items-center gap-1.5 font-bold text-xs lg:text-sm shadow-lg backdrop-blur-sm ${diffConfig.badgeText}`} title={`Difficulty: ${diffConfig.name} (${diffConfig.healthMultiplier}x Mutant HP, ${diffConfig.densityMultiplier}x Wave Density, +${diffConfig.techPointReward} TP Completion Bounty)`}>
+                <ShieldAlert className="w-3.5 h-3.5" />
+                <span>{diffConfig.name.toUpperCase()} ({diffConfig.healthMultiplier}x HP)</span>
             </div>
             <div className={`bg-neutral-900/90 border px-3 py-1 rounded flex items-center gap-2 font-bold text-sm lg:text-base shadow-lg backdrop-blur-sm ${towersRef.current.length >= currentTowerLimit ? 'border-red-600/50 text-red-500' : 'border-neutral-600/50 text-neutral-400'}`}>
                 <span>Towers: {towersRef.current.length} / {currentTowerLimit}</span>
@@ -2064,8 +2099,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
               startNextWave();
             }}
             onReturnToBase={() => {
-              const difficultyMult = map.difficulty === 'HARD' ? 3 : map.difficulty === 'MEDIUM' ? 2 : 1;
-              onWin(200 * difficultyMult);
+              onWin(0, difficulty);
             }}
           />
         )}

@@ -107,6 +107,7 @@ export interface PlayerProgress {
   techPoints: number; // Meta currency
   upgrades: GlobalUpgrades;
   completedMaps: string[];
+  completedDifficulties?: string[];
   unlockedAchievements?: string[]; // IDs of unlocked milestones
   stats?: {
     mutantsKilled: number;

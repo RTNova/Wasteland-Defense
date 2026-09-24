@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { GameCanvas } from './components/game/GameCanvas';
 import { UPGRADE_CONFIG } from './config/constants';
-import { GameMap, PlayerProgress, GlobalUpgrades, Profile } from './types/index';
+import { GameMap, PlayerProgress, GlobalUpgrades, Profile, DifficultyLevel } from './types/index';
 import { Zap } from 'lucide-react';
 import { Shop } from './components/ui/Shop';
 import { MainMenu } from './components/ui/MainMenu';
@@ -35,6 +35,7 @@ type GameMode = 'STANDARD' | 'ENDLESS';
 function App() {
   // --- STATE ---
   const [activeMap, setActiveMap] = useState<GameMap | null>(null);
+  const [selectedDifficulty, setSelectedDifficulty] = useState<DifficultyLevel>('MEDIUM');
   const [view, setView] = useState<ViewState>('PROFILES');
   const [gameMode, setGameMode] = useState<GameMode>('STANDARD');
   
@@ -221,24 +222,33 @@ function App() {
       setView(targetView);
   };
 
-  const handleWin = (reward: number) => {
-    // Standard Map Completion Reward
-    if (reward > 0) {
-        setProgress(prev => {
-          const next = {
-            ...prev,
-            techPoints: prev.techPoints + reward,
-            completedMaps: (gameMode === 'STANDARD' && activeMap) 
-              ? [...new Set([...prev.completedMaps, activeMap.id])] 
-              : prev.completedMaps,
-            stats: {
-              ...(prev.stats || INITIAL_PROGRESS_STATS),
-              totalTechPointsEarned: ((prev.stats?.totalTechPointsEarned) || 0) + reward
-            }
-          };
-          return next;
-        });
-    }
+  const handleWin = (reward: number, difficulty: DifficultyLevel = selectedDifficulty) => {
+    // Standard Map Completion Reward & Difficulty Progress
+    setProgress(prev => {
+      const isStandard = gameMode === 'STANDARD';
+      const updatedCompletedMaps = (isStandard && activeMap) 
+        ? [...new Set([...prev.completedMaps, activeMap.id])] 
+        : prev.completedMaps;
+
+      const diffKey = activeMap ? `${activeMap.id}_${difficulty}` : '';
+      const existingDiffs = prev.completedDifficulties || [];
+      const updatedDifficulties = (isStandard && diffKey && !existingDiffs.includes(diffKey))
+        ? [...existingDiffs, diffKey]
+        : existingDiffs;
+
+      const next = {
+        ...prev,
+        techPoints: prev.techPoints + (reward > 0 ? reward : 0),
+        completedMaps: updatedCompletedMaps,
+        completedDifficulties: updatedDifficulties,
+        stats: {
+          ...(prev.stats || INITIAL_PROGRESS_STATS),
+          totalTechPointsEarned: ((prev.stats?.totalTechPointsEarned) || 0) + (reward > 0 ? reward : 0)
+        }
+      };
+      checkAchievements(next);
+      return next;
+    });
     setActiveMap(null);
   };
 
@@ -307,6 +317,7 @@ function App() {
             map={activeMap} 
             upgrades={progress.upgrades}
             currentTechPoints={progress.techPoints}
+            difficulty={selectedDifficulty}
             onExit={() => setActiveMap(null)} 
             onWin={handleWin}
             onAddGlobalPoints={handleGlobalPointsAdd}
@@ -373,7 +384,10 @@ function App() {
         {view === 'MAP_SELECT' && (
             <MapSelection 
                 progress={progress}
-                onSelectMap={setActiveMap}
+                onSelectMap={(map, difficulty) => {
+                    setSelectedDifficulty(difficulty);
+                    setActiveMap(map);
+                }}
                 onBack={() => setView('MENU')}
                 mode={gameMode}
             />

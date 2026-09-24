@@ -261,7 +261,7 @@ export const PostWaveSummaryModal: React.FC<PostWaveSummaryModalProps> = ({
                   )}
                   {summary.techPointsBreakdown.mapClearBonus && summary.techPointsBreakdown.mapClearBonus > 0 && (
                     <div className="flex justify-between text-emerald-400 font-bold">
-                      <span>Victory Bounty:</span>
+                      <span>Victory Bounty ({summary.mapDifficulty}):</span>
                       <span>+{summary.techPointsBreakdown.mapClearBonus} TP</span>
                     </div>
                   )}

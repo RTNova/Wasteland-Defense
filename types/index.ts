@@ -154,10 +154,12 @@ export interface GroundEffect {
   isDarkPoison?: boolean; // Chemist Lvl 10
 }
 
+export type DifficultyLevel = 'EASY' | 'MEDIUM' | 'HARD';
+
 export interface GameMap {
   id: string;
   name: string;
-  difficulty: 'EASY' | 'MEDIUM' | 'HARD' | 'EXTREME';
+  difficulty: DifficultyLevel | 'EXTREME';
   path: Point[]; // Array of coordinates (0-100 percentages)
   obstacles?: Obstacle[]; // Blocked areas
   background: string;
@@ -181,6 +183,7 @@ export interface PlayerProgress {
   techPoints: number; // Meta currency
   upgrades: GlobalUpgrades;
   completedMaps: string[];
+  completedDifficulties?: string[]; // e.g., ['ruins_EASY', 'ruins_HARD']
   unlockedAchievements?: string[]; // IDs of unlocked milestones
   stats?: {
     mutantsKilled: number;

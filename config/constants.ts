@@ -1,4 +1,5 @@
-import { EnemyType, GameMap, Point, TowerType, Wave, Tower, Obstacle } from '../types/index';
+import { EnemyType, GameMap, Point, TowerType, Wave, Tower, Obstacle, DifficultyLevel } from '../types/index';
+import { getDifficultyConfig } from './difficulty';
 
 export const CANVAS_WIDTH = 800;
 export const CANVAS_HEIGHT = 600;
@@ -280,55 +281,65 @@ export const UPGRADE_CONFIG = {
   cashLevel: { name: 'Reserves', cost: 250, desc: '+50 Starting Cash per level' }
 };
 
-export const generateWaves = (count: number): Wave[] => {
+export const generateWaves = (count: number, difficulty: DifficultyLevel = 'MEDIUM'): Wave[] => {
+  const diffConfig = getDifficultyConfig(difficulty);
   const waves: Wave[] = [];
+
   for (let i = 1; i <= count; i++) {
-    let enemies = [];
+    const enemies: { type: EnemyType; count: number; spacing: number }[] = [];
     
+    const addGroup = (type: EnemyType, baseCount: number, baseSpacing: number) => {
+      enemies.push({
+        type,
+        count: Math.max(1, Math.round(baseCount * diffConfig.densityMultiplier)),
+        spacing: Math.max(4, Math.round(baseSpacing * diffConfig.spacingMultiplier))
+      });
+    };
+
     // Boss wave check (Every 5 waves)
     const isBossWave = i % 5 === 0;
 
     if (isBossWave) {
         // Boss Waves scaling
         if (i === 5) {
-             enemies.push({ type: EnemyType.TANK, count: 5, spacing: 40 });
-             enemies.push({ type: EnemyType.HEALER, count: 1, spacing: 100 });
+             addGroup(EnemyType.TANK, 5, 40);
+             addGroup(EnemyType.HEALER, 1, 100);
         } else if (i === 10) {
-             enemies.push({ type: EnemyType.BOSS, count: 1, spacing: 0 }); 
-             enemies.push({ type: EnemyType.NINJA, count: 1, spacing: 100 }); // Single Mini-boss intro
+             addGroup(EnemyType.BOSS, 1, 0); 
+             addGroup(EnemyType.NINJA, 1, 100); // Single Mini-boss intro
         } else if (i === 15) {
-             enemies.push({ type: EnemyType.BOSS, count: 2, spacing: 150 });
-             enemies.push({ type: EnemyType.ICE_MAGE, count: 4, spacing: 100 }); 
+             addGroup(EnemyType.BOSS, 2, 150);
+             addGroup(EnemyType.ICE_MAGE, 4, 100); 
         } else if (i === 20) {
-             enemies.push({ type: EnemyType.MATRYOSHKA, count: 1, spacing: 0 });
+             addGroup(EnemyType.MATRYOSHKA, 1, 0);
         } else {
              const eliteCount = Math.floor(i / 20);
-             if (eliteCount > 0) enemies.push({ type: EnemyType.MATRYOSHKA, count: eliteCount, spacing: 300 });
+             if (eliteCount > 0) addGroup(EnemyType.MATRYOSHKA, eliteCount, 300);
              
-             enemies.push({ type: EnemyType.HEALER, count: Math.floor(i/8), spacing: 200 });
-             enemies.push({ type: EnemyType.ICE_MAGE, count: Math.floor(i/6), spacing: 150 });
-             enemies.push({ type: EnemyType.NINJA, count: 1 + Math.floor(i/15), spacing: 200 }); // Sparse Ninjas
-             enemies.push({ type: EnemyType.BOSS, count: Math.floor(i/10) + 1, spacing: 200 });
+             addGroup(EnemyType.HEALER, Math.floor(i/8), 200);
+             addGroup(EnemyType.ICE_MAGE, Math.floor(i/6), 150);
+             addGroup(EnemyType.NINJA, 1 + Math.floor(i/15), 200); // Sparse Ninjas
+             addGroup(EnemyType.BOSS, Math.floor(i/10) + 1, 200);
         }
     } else {
         // Normal Waves with progressive scaling
-        const difficulty = i;
+        const difficultyProgress = i;
         
         if (i <= 3) {
-            enemies.push({ type: EnemyType.WALKER, count: 6 + i * 2, spacing: 15 });
+            addGroup(EnemyType.WALKER, 6 + i * 2, 15);
         } else {
-            const runnerCount = Math.floor(difficulty * 1.5);
-            const walkerCount = Math.floor(difficulty * 2);
+            const runnerCount = Math.floor(difficultyProgress * 1.5);
+            const walkerCount = Math.floor(difficultyProgress * 2);
             
-            enemies.push({ type: EnemyType.WALKER, count: walkerCount, spacing: 12 });
+            addGroup(EnemyType.WALKER, walkerCount, 12);
             
-            if (i > 3) enemies.push({ type: EnemyType.RUNNER, count: runnerCount, spacing: 15 });
-            if (i > 6) enemies.push({ type: EnemyType.TANK, count: Math.floor(i / 3), spacing: 40 });
+            if (i > 3) addGroup(EnemyType.RUNNER, runnerCount, 15);
+            if (i > 6) addGroup(EnemyType.TANK, Math.floor(i / 3), 40);
             
             // Introduce new enemies in normal waves
             // Reduced Ninja spawn rate significantly as they are now strong
-            if (i > 8 && Math.random() > 0.90) enemies.push({ type: EnemyType.NINJA, count: 1, spacing: 100 });
-            if (i > 12 && Math.random() > 0.7) enemies.push({ type: EnemyType.ICE_MAGE, count: 1 + Math.floor(i/8), spacing: 100 });
+            if (i > 8 && Math.random() > 0.90) addGroup(EnemyType.NINJA, 1, 100);
+            if (i > 12 && Math.random() > 0.7) addGroup(EnemyType.ICE_MAGE, 1 + Math.floor(i/8), 100);
         }
     }
 
