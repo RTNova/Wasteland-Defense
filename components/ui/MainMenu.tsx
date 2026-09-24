@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { BookOpen, Map as MapIcon, ShoppingBag, Terminal, Infinity as InfinityIcon } from 'lucide-react';
+import { BookOpen, Map as MapIcon, ShoppingBag, Terminal, Infinity as InfinityIcon, Trophy } from 'lucide-react';
 import { soundManager, SoundSettings } from '../../config/soundManager';
 import { SoundSettingsPanel } from './SoundSettingsPanel';
 
-type ViewState = 'MENU' | 'MAP_SELECT' | 'SHOP' | 'BESTIARY';
+type ViewState = 'MENU' | 'MAP_SELECT' | 'SHOP' | 'BESTIARY' | 'ACHIEVEMENTS';
 
 interface MainMenuProps {
     onNavigate: (view: ViewState, mode?: 'STANDARD' | 'ENDLESS') => void;
@@ -11,6 +11,8 @@ interface MainMenuProps {
     onToggleDevMode: () => void;
     soundSettings?: SoundSettings;
     onUpdateSoundSettings?: (settings: Partial<SoundSettings>) => void;
+    unlockedAchievementsCount?: number;
+    totalAchievementsCount?: number;
 }
 
 export const MainMenu: React.FC<MainMenuProps> = ({ 
@@ -18,7 +20,9 @@ export const MainMenu: React.FC<MainMenuProps> = ({
   isDevMode, 
   onToggleDevMode,
   soundSettings: externalSoundSettings,
-  onUpdateSoundSettings: externalOnUpdateSoundSettings
+  onUpdateSoundSettings: externalOnUpdateSoundSettings,
+  unlockedAchievementsCount = 0,
+  totalAchievementsCount = 12
 }) => {
   const [internalSoundSettings, setInternalSoundSettings] = useState<SoundSettings>(() => soundManager.getSettings());
 
@@ -72,34 +76,49 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                 </div>
             </button>
 
-            <div className="grid grid-cols-2 gap-4 mt-2">
+            <div className="grid grid-cols-3 gap-3 mt-2">
                 {/* Bestiary Button */}
                 <button 
                     onClick={() => handleNavClick('BESTIARY')}
-                    className="group relative h-32 bg-gradient-to-b from-slate-800 to-slate-900 rounded-xl border-2 border-slate-600 shadow-lg hover:-translate-y-1 transition-transform overflow-hidden flex flex-col items-center justify-center gap-3"
+                    className="group relative h-28 bg-gradient-to-b from-slate-800 to-slate-900 rounded-xl border-2 border-slate-600 shadow-lg hover:-translate-y-1 transition-transform overflow-hidden flex flex-col items-center justify-center gap-2 p-2"
                 >
                     <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10"></div>
                     <div className="relative">
-                        <BookOpen className="w-10 h-10 text-slate-300 drop-shadow-glow" />
+                        <BookOpen className="w-7 h-7 text-slate-300 drop-shadow-glow" />
                     </div>
                     <div className="text-center relative z-10">
-                        <h3 className="text-lg font-bold text-white uppercase">Bestiary</h3>
-                        <p className="text-[10px] text-slate-400">Intel Database</p>
+                        <h3 className="text-sm font-bold text-white uppercase">Bestiary</h3>
+                        <p className="text-[9px] text-slate-400">Intel</p>
+                    </div>
+                </button>
+
+                {/* Achievements Button */}
+                <button 
+                    onClick={() => handleNavClick('ACHIEVEMENTS')}
+                    className="group relative h-28 bg-gradient-to-b from-amber-900 to-amber-950 rounded-xl border-2 border-amber-600 shadow-lg hover:-translate-y-1 transition-transform overflow-hidden flex flex-col items-center justify-center gap-2 p-2"
+                >
+                    <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10"></div>
+                    <div className="relative">
+                        <Trophy className="w-7 h-7 text-amber-400 drop-shadow-glow" />
+                    </div>
+                    <div className="text-center relative z-10">
+                        <h3 className="text-sm font-bold text-white uppercase">Badges</h3>
+                        <p className="text-[9px] text-amber-300 font-mono">{unlockedAchievementsCount}/{totalAchievementsCount}</p>
                     </div>
                 </button>
 
                 {/* Shop Button */}
                 <button 
                     onClick={() => handleNavClick('SHOP')}
-                    className="group relative h-32 bg-gradient-to-b from-yellow-900 to-yellow-950 rounded-xl border-2 border-yellow-700 shadow-lg hover:-translate-y-1 transition-transform overflow-hidden flex flex-col items-center justify-center gap-3"
+                    className="group relative h-28 bg-gradient-to-b from-yellow-900 to-yellow-950 rounded-xl border-2 border-yellow-700 shadow-lg hover:-translate-y-1 transition-transform overflow-hidden flex flex-col items-center justify-center gap-2 p-2"
                 >
                     <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/diagmonds-light.png')] opacity-10"></div>
                     <div className="relative">
-                        <ShoppingBag className="w-10 h-10 text-yellow-300 drop-shadow-glow" />
+                        <ShoppingBag className="w-7 h-7 text-yellow-300 drop-shadow-glow" />
                     </div>
                     <div className="text-center relative z-10">
-                        <h3 className="text-lg font-bold text-white uppercase">Armory</h3>
-                        <p className="text-[10px] text-yellow-400">Upgrades</p>
+                        <h3 className="text-sm font-bold text-white uppercase">Armory</h3>
+                        <p className="text-[9px] text-yellow-400">Upgrades</p>
                     </div>
                 </button>
             </div>

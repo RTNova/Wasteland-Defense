@@ -76,6 +76,7 @@ interface GameCanvasProps {
   onExit: () => void;
   onWin: (reward: number) => void;
   onAddGlobalPoints?: (amount: number) => void;
+  onReportCombatStats?: (stats: { mutantsKilled?: number; bossesKilled?: number; wavesCleared?: number; endlessWaveRecord?: number; towersBuilt?: number; techPointsEarned?: number }) => void;
   isDevMode?: boolean;
   initialIsEndless?: boolean;
 }
@@ -106,6 +107,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   onExit, 
   onWin, 
   onAddGlobalPoints, 
+  onReportCombatStats,
   isDevMode = false, 
   initialIsEndless = false 
 }) => {
@@ -205,6 +207,8 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
 
   const totalStatsRef = useRef({
     enemiesDefeated: 0,
+    bossesDefeated: 0,
+    towersBuilt: 0,
     enemyTypeBreakdown: {} as Record<string, number>,
   });
 
@@ -564,6 +568,9 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
 
       waveStatsRef.current.enemiesDefeated++;
       totalStatsRef.current.enemiesDefeated++;
+      if (enemy.type === EnemyType.BOSS) {
+        totalStatsRef.current.bossesDefeated++;
+      }
 
       const typeKey = enemy.type;
       waveStatsRef.current.enemyTypeBreakdown[typeKey] = 
@@ -572,6 +579,13 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
           (totalStatsRef.current.enemyTypeBreakdown[typeKey] || 0) + 1;
 
       waveStatsRef.current.moneyEarned += enemy.reward;
+
+      if (onReportCombatStats) {
+        onReportCombatStats({
+          mutantsKilled: 1,
+          bossesKilled: enemy.type === EnemyType.BOSS ? 1 : 0
+        });
+      }
 
       handleEnemyDeath(enemy);
   };
@@ -773,6 +787,14 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
           setWaveSummary(summaryData);
           setIsSummaryOpen(true);
           currentWaveIndexRef.current++;
+
+          if (onReportCombatStats) {
+            onReportCombatStats({
+              wavesCleared: 1,
+              endlessWaveRecord: isEndless ? waveNumJustFinished : 0,
+              techPointsEarned: totalWaveTP
+            });
+          }
 
           // Play victory fanfare chime
           soundManager.playVictory();
@@ -1820,6 +1842,10 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
                   rotation: 0,
                   totalDamage: 0
                 });
+                totalStatsRef.current.towersBuilt++;
+                if (onReportCombatStats) {
+                  onReportCombatStats({ towersBuilt: 1 });
+                }
                 soundManager.playBuild();
             }
         }

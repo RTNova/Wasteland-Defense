@@ -181,6 +181,15 @@ export interface PlayerProgress {
   techPoints: number; // Meta currency
   upgrades: GlobalUpgrades;
   completedMaps: string[];
+  unlockedAchievements?: string[]; // IDs of unlocked milestones
+  stats?: {
+    mutantsKilled: number;
+    bossesKilled: number;
+    totalTechPointsEarned: number;
+    wavesCleared: number;
+    endlessWaveRecord: number;
+    towersBuilt: number;
+  };
 }
 
 export interface Profile {

@@ -1,5 +1,5 @@
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { GameCanvas } from './components/game/GameCanvas';
 import { UPGRADE_CONFIG } from './config/constants';
 import { GameMap, PlayerProgress, GlobalUpgrades, Profile } from './types/index';
@@ -11,7 +11,10 @@ import { Bestiary } from './components/ui/Bestiary';
 import { ProfileSelection } from './components/ui/ProfileSelection';
 import { SoundSettingsPanel } from './components/ui/SoundSettingsPanel';
 import { SaveToast } from './components/ui/SaveToast';
+import { Achievements } from './components/ui/Achievements';
+import { AchievementUnlockedToast } from './components/ui/AchievementUnlockedToast';
 import { soundManager, SoundSettings } from './config/soundManager';
+import { ACHIEVEMENTS, Achievement, INITIAL_PROGRESS_STATS } from './config/achievements';
 
 const INITIAL_PROGRESS: PlayerProgress = {
   techPoints: 0,
@@ -21,10 +24,12 @@ const INITIAL_PROGRESS: PlayerProgress = {
     discountLevel: 0,
     cashLevel: 0
   },
-  completedMaps: []
+  completedMaps: [],
+  unlockedAchievements: [],
+  stats: { ...INITIAL_PROGRESS_STATS }
 };
 
-type ViewState = 'PROFILES' | 'MENU' | 'MAP_SELECT' | 'SHOP' | 'BESTIARY';
+type ViewState = 'PROFILES' | 'MENU' | 'MAP_SELECT' | 'SHOP' | 'BESTIARY' | 'ACHIEVEMENTS';
 type GameMode = 'STANDARD' | 'ENDLESS';
 
 function App() {
@@ -42,7 +47,9 @@ function App() {
   const [isDevMode, setIsDevMode] = useState(false);
   const [soundSettings, setSoundSettings] = useState<SoundSettings>(() => soundManager.getSettings());
   const [showSaveToast, setShowSaveToast] = useState(false);
+  const [unlockedAchievementToast, setUnlockedAchievementToast] = useState<Achievement | null>(null);
   const saveToastTimeoutRef = useRef<any>(null);
+  const achievementToastTimeoutRef = useRef<any>(null);
   const initialLoadDoneRef = useRef(false);
 
   const triggerSaveNotification = () => {
@@ -54,6 +61,44 @@ function App() {
       setShowSaveToast(false);
     }, 2200);
   };
+
+  // Check achievements against current stats and progress
+  const checkAchievements = useCallback((currentProgress: PlayerProgress) => {
+    const unlocked = new Set(currentProgress.unlockedAchievements || []);
+    const stats = currentProgress.stats || INITIAL_PROGRESS_STATS;
+    let newlyUnlocked: Achievement[] = [];
+    let bonusTP = 0;
+
+    for (const achievement of ACHIEVEMENTS) {
+      if (!unlocked.has(achievement.id)) {
+        const val = achievement.getValue(stats, currentProgress);
+        if (val >= achievement.targetValue) {
+          unlocked.add(achievement.id);
+          newlyUnlocked.push(achievement);
+          bonusTP += achievement.rewardTP;
+        }
+      }
+    }
+
+    if (newlyUnlocked.length > 0) {
+      const latest = newlyUnlocked[0];
+      setUnlockedAchievementToast(latest);
+      soundManager.playAchievementUnlocked();
+
+      if (achievementToastTimeoutRef.current) {
+        clearTimeout(achievementToastTimeoutRef.current);
+      }
+      achievementToastTimeoutRef.current = setTimeout(() => {
+        setUnlockedAchievementToast(null);
+      }, 4000);
+
+      setProgress(prev => ({
+        ...prev,
+        techPoints: prev.techPoints + bonusTP,
+        unlockedAchievements: Array.from(unlocked)
+      }));
+    }
+  }, []);
 
   // --- EFFECTS ---
   
@@ -86,7 +131,20 @@ function App() {
     const savedProfiles = localStorage.getItem('wasteland_defense_profiles');
     if (savedProfiles) {
       try {
-        setProfiles(JSON.parse(savedProfiles));
+        const parsed: Profile[] = JSON.parse(savedProfiles);
+        // Ensure legacy profiles have unlockedAchievements array and stats object
+        const sanitized = parsed.map(p => ({
+          ...p,
+          progress: {
+            ...p.progress,
+            unlockedAchievements: p.progress.unlockedAchievements || [],
+            stats: {
+              ...INITIAL_PROGRESS_STATS,
+              ...(p.progress.stats || {})
+            }
+          }
+        }));
+        setProfiles(sanitized);
       } catch (e) {
         console.error("Failed to load profiles", e);
         setProfiles([]);
@@ -102,9 +160,12 @@ function App() {
     }
   }, [profiles, loading]);
 
-  // Sync current progress to the active profile object & display subtle Game Saved toast
+  // Sync current progress to the active profile object, evaluate achievements & display subtle Game Saved toast
   useEffect(() => {
       if (currentProfileId && !loading) {
+          // Check for unlocked achievements
+          checkAchievements(progress);
+
           setProfiles(prev => prev.map(p => 
               p.id === currentProfileId 
               ? { ...p, progress, lastPlayed: Date.now() } 
@@ -118,7 +179,7 @@ function App() {
               initialLoadDoneRef.current = true;
           }
       }
-  }, [progress]);
+  }, [progress, currentProfileId, loading, checkAchievements]);
 
   // --- PROFILE ACTIONS ---
 
@@ -163,13 +224,20 @@ function App() {
   const handleWin = (reward: number) => {
     // Standard Map Completion Reward
     if (reward > 0) {
-        setProgress(prev => ({
-          ...prev,
-          techPoints: prev.techPoints + reward,
-          completedMaps: (gameMode === 'STANDARD' && activeMap) 
-            ? [...new Set([...prev.completedMaps, activeMap.id])] 
-            : prev.completedMaps
-        }));
+        setProgress(prev => {
+          const next = {
+            ...prev,
+            techPoints: prev.techPoints + reward,
+            completedMaps: (gameMode === 'STANDARD' && activeMap) 
+              ? [...new Set([...prev.completedMaps, activeMap.id])] 
+              : prev.completedMaps,
+            stats: {
+              ...(prev.stats || INITIAL_PROGRESS_STATS),
+              totalTechPointsEarned: ((prev.stats?.totalTechPointsEarned) || 0) + reward
+            }
+          };
+          return next;
+        });
     }
     setActiveMap(null);
   };
@@ -178,9 +246,37 @@ function App() {
       // Used for Endless Mode mid-game rewards
       setProgress(prev => ({
           ...prev,
-          techPoints: prev.techPoints + amount
+          techPoints: prev.techPoints + amount,
+          stats: {
+            ...(prev.stats || INITIAL_PROGRESS_STATS),
+            totalTechPointsEarned: ((prev.stats?.totalTechPointsEarned) || 0) + amount
+          }
       }));
   };
+
+  const handleReportCombatStats = useCallback((delta: { 
+    mutantsKilled?: number; 
+    bossesKilled?: number; 
+    wavesCleared?: number; 
+    endlessWaveRecord?: number; 
+    towersBuilt?: number; 
+    techPointsEarned?: number;
+  }) => {
+    setProgress(prev => {
+      const currentStats = prev.stats || INITIAL_PROGRESS_STATS;
+      return {
+        ...prev,
+        stats: {
+          mutantsKilled: currentStats.mutantsKilled + (delta.mutantsKilled || 0),
+          bossesKilled: currentStats.bossesKilled + (delta.bossesKilled || 0),
+          wavesCleared: currentStats.wavesCleared + (delta.wavesCleared || 0),
+          endlessWaveRecord: Math.max(currentStats.endlessWaveRecord || 0, delta.endlessWaveRecord || 0),
+          towersBuilt: currentStats.towersBuilt + (delta.towersBuilt || 0),
+          totalTechPointsEarned: currentStats.totalTechPointsEarned + (delta.techPointsEarned || 0)
+        }
+      };
+    });
+  }, []);
 
   const buyUpgrade = (key: keyof GlobalUpgrades) => {
     const config = UPGRADE_CONFIG[key as keyof typeof UPGRADE_CONFIG];
@@ -214,10 +310,12 @@ function App() {
             onExit={() => setActiveMap(null)} 
             onWin={handleWin}
             onAddGlobalPoints={handleGlobalPointsAdd}
+            onReportCombatStats={handleReportCombatStats}
             isDevMode={isDevMode}
             initialIsEndless={gameMode === 'ENDLESS'}
         />
         <SaveToast show={showSaveToast} />
+        <AchievementUnlockedToast achievement={unlockedAchievementToast} />
       </>
     );
   }
@@ -267,6 +365,8 @@ function App() {
                 onToggleDevMode={() => setIsDevMode(!isDevMode)}
                 soundSettings={soundSettings}
                 onUpdateSoundSettings={handleUpdateSoundSettings}
+                unlockedAchievementsCount={progress.unlockedAchievements?.length || 0}
+                totalAchievementsCount={ACHIEVEMENTS.length}
             />
         )}
 
@@ -292,10 +392,19 @@ function App() {
                 onBack={() => setView('MENU')}
             />
         )}
+
+        {view === 'ACHIEVEMENTS' && (
+            <Achievements
+                progress={progress}
+                onBack={() => setView('MENU')}
+            />
+        )}
       </div>
 
       {/* Subtle Game Saved Toast */}
       <SaveToast show={showSaveToast} />
+      {/* Achievement Unlocked Toast Notification */}
+      <AchievementUnlockedToast achievement={unlockedAchievementToast} />
     </div>
   );
 }

@@ -47,6 +47,7 @@ export const ProfileSelection: React.FC<ProfileSelectionProps> = ({ profiles, on
                                     <div className="flex gap-3 mt-1 text-xs text-neutral-400 font-mono">
                                         <span>TP: {profile.progress.techPoints}</span>
                                         <span>Maps: {profile.progress.completedMaps.length}</span>
+                                        <span className="text-amber-400">🏆 {profile.progress.unlockedAchievements?.length || 0}</span>
                                     </div>
                                 </div>
                             </div>

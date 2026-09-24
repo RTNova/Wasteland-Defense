@@ -336,6 +336,35 @@ class SoundManager {
       osc.stop(startTime + 0.35);
     });
   }
+
+  // Achievement Unlocked chime fanfare
+  public playAchievementUnlocked() {
+    if (this.settings.sfxMuted) return;
+    this.initContext();
+    if (!this.ctx || !this.sfxGainNode) return;
+
+    const now = this.ctx.currentTime;
+    // Ascending brassy/crystal fanfare chords [C5, E5, G5, C6]
+    const notes = [523.25, 659.25, 783.99, 1046.50];
+    notes.forEach((freq, idx) => {
+      const osc = this.ctx!.createOscillator();
+      const gain = this.ctx!.createGain();
+      const startTime = now + idx * 0.09;
+
+      osc.type = idx === notes.length - 1 ? 'sine' : 'triangle';
+      osc.frequency.setValueAtTime(freq, startTime);
+
+      gain.gain.setValueAtTime(0.001, startTime);
+      gain.gain.linearRampToValueAtTime(0.24, startTime + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, startTime + (idx === notes.length - 1 ? 0.6 : 0.3));
+
+      osc.connect(gain);
+      gain.connect(this.sfxGainNode!);
+
+      osc.start(startTime);
+      osc.stop(startTime + (idx === notes.length - 1 ? 0.6 : 0.3));
+    });
+  }
 }
 
 export const soundManager = new SoundManager();
