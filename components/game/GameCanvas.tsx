@@ -5,6 +5,8 @@ import { CANVAS_HEIGHT, CANVAS_WIDTH, ENEMY_STATS, TOWER_DEFINITIONS, generateWa
 import { Heart, Zap, Crosshair, Play, Pause, LogOut, FastForward, Repeat, ArrowUp, Terminal, Skull, Minimize2, Maximize2, Sword, Infinity as InfinityIcon, BarChart3, CheckCircle2 } from 'lucide-react';
 import { drawTower, drawEnemy, drawProjectile, drawGroundEffect } from './RenderUtils';
 import { PostWaveSummaryModal, WaveSummaryData } from '../ui/PostWaveSummaryModal';
+import { soundManager, SoundSettings } from '../../config/soundManager';
+import { SoundSettingsPanel } from '../ui/SoundSettingsPanel';
 
 // --- SUB-COMPONENT: TOWER PREVIEW ---
 const TowerPreview: React.FC<{ type: TowerType }> = ({ type }) => {
@@ -173,6 +175,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
 
   // Selection & Dragging State
   const [selectedTowerId, setSelectedTowerId] = useState<string | null>(null);
+  const [inGameSoundSettings, setInGameSoundSettings] = useState<SoundSettings>(() => soundManager.getSettings());
   const [dragState, setDragState] = useState<DragState>({
     isDragging: false,
     towerType: null,
@@ -512,6 +515,9 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     setWave(waveData.number);
     setVictory(false); // Ensure victory is cleared if we are starting a new wave
     
+    // Play wave start alarm sound
+    soundManager.playWaveStart();
+
     // Close summary modal if open
     setIsSummaryOpen(false);
 
@@ -538,6 +544,8 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   const onEnemyKilled = (enemy: Enemy) => {
       if ((enemy as any).isDefeated) return;
       (enemy as any).isDefeated = true;
+
+      soundManager.playEnemyKilled();
 
       waveStatsRef.current.enemiesDefeated++;
       totalStatsRef.current.enemiesDefeated++;
@@ -741,6 +749,9 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
           setWaveSummary(summaryData);
           setIsSummaryOpen(true);
           currentWaveIndexRef.current++;
+
+          // Play victory fanfare chime
+          soundManager.playVictory();
 
           if (isFinal) {
             setVictory(true);
@@ -1737,6 +1748,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
                   rotation: 0,
                   totalDamage: 0
                 });
+                soundManager.playBuild();
             }
         }
       }
@@ -2026,8 +2038,16 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
             </div>
         )}
 
-        <div className="hidden lg:block p-4 border-b border-neutral-700 bg-neutral-900">
+        <div className="hidden lg:flex items-center justify-between p-4 border-b border-neutral-700 bg-neutral-900">
             <h1 className="text-xl font-title text-neutral-400 tracking-wider">COMMAND CENTER</h1>
+            <SoundSettingsPanel 
+                settings={inGameSoundSettings} 
+                onUpdateSettings={(newS) => {
+                    const saved = soundManager.saveSettings(newS);
+                    setInGameSoundSettings(saved);
+                }} 
+                variant="compact"
+            />
         </div>
 
         <div className="p-2 lg:p-4 grid grid-cols-2 gap-2 border-b border-neutral-800 bg-neutral-800">

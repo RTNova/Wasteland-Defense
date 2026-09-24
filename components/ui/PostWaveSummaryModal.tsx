@@ -4,6 +4,7 @@ import {
   Award, Crosshair, Coins, Repeat
 } from 'lucide-react';
 import { TowerType } from '../../types/index';
+import { soundManager } from '../../config/soundManager';
 
 export interface WaveSummaryData {
   waveNumber: number;
@@ -447,7 +448,10 @@ export const PostWaveSummaryModal: React.FC<PostWaveSummaryModalProps> = ({
             ) : (
               <>
                 <button
-                  onClick={onPrepareDefenses}
+                  onClick={() => {
+                    soundManager.playClick();
+                    onPrepareDefenses();
+                  }}
                   className="sm:w-1/2 py-3 px-4 bg-neutral-800 hover:bg-neutral-750 text-neutral-200 hover:text-white font-bold rounded-lg uppercase tracking-wider border border-neutral-700 transition flex items-center justify-center gap-2 text-xs sm:text-sm"
                   title="Close modal to inspect map and build/upgrade defenses"
                 >
@@ -456,7 +460,10 @@ export const PostWaveSummaryModal: React.FC<PostWaveSummaryModalProps> = ({
                 </button>
 
                 <button
-                  onClick={onNextWave}
+                  onClick={() => {
+                    soundManager.playClick();
+                    onNextWave();
+                  }}
                   className="sm:w-1/2 py-3 px-4 bg-red-600 hover:bg-red-500 text-white font-bold rounded-lg uppercase tracking-wider transition flex items-center justify-center gap-2 shadow-lg shadow-red-950/50 text-xs sm:text-sm group"
                 >
                   <span>Deploy Wave {(summary.waveNumber + 1).toString().padStart(2, '0')}</span>

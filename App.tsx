@@ -9,6 +9,8 @@ import { MainMenu } from './components/ui/MainMenu';
 import { MapSelection } from './components/ui/MapSelection';
 import { Bestiary } from './components/ui/Bestiary';
 import { ProfileSelection } from './components/ui/ProfileSelection';
+import { SoundSettingsPanel } from './components/ui/SoundSettingsPanel';
+import { soundManager, SoundSettings } from './config/soundManager';
 
 const INITIAL_PROGRESS: PlayerProgress = {
   techPoints: 0,
@@ -37,8 +39,33 @@ function App() {
   
   const [loading, setLoading] = useState(true);
   const [isDevMode, setIsDevMode] = useState(false);
+  const [soundSettings, setSoundSettings] = useState<SoundSettings>(() => soundManager.getSettings());
 
   // --- EFFECTS ---
+  
+  // Ambient Music Management
+  useEffect(() => {
+    soundManager.loadSettings();
+    setSoundSettings(soundManager.getSettings());
+    // Auto-start ambient dark synth on first user interaction or mount
+    const handleFirstInteraction = () => {
+      soundManager.startAmbientMusic();
+      window.removeEventListener('click', handleFirstInteraction);
+      window.removeEventListener('keydown', handleFirstInteraction);
+    };
+    window.addEventListener('click', handleFirstInteraction);
+    window.addEventListener('keydown', handleFirstInteraction);
+
+    return () => {
+      window.removeEventListener('click', handleFirstInteraction);
+      window.removeEventListener('keydown', handleFirstInteraction);
+    };
+  }, []);
+
+  const handleUpdateSoundSettings = (updated: Partial<SoundSettings>) => {
+    const saved = soundManager.saveSettings(updated);
+    setSoundSettings(saved);
+  };
   
   // Load Profiles on Start
   useEffect(() => {
@@ -182,13 +209,20 @@ function App() {
           WASTELAND <span className="text-red-600">DEFENSE</span>
         </h1>
         
-        {/* Currency Display (Only if profile selected) */}
-        {currentProfileId && (
-            <div className="absolute top-4 right-4 flex items-center gap-2 bg-neutral-800 px-4 py-2 rounded-full border border-yellow-900/50 shadow-lg z-20">
-                <Zap className="w-4 h-4 text-yellow-500" />
-                <span className="text-yellow-500 font-bold text-lg">{progress.techPoints}</span>
-            </div>
-        )}
+        {/* Header Sound Controls & Currency Display */}
+        <div className="absolute top-4 right-4 flex items-center gap-3 z-20">
+            <SoundSettingsPanel 
+                settings={soundSettings}
+                onUpdateSettings={handleUpdateSoundSettings}
+                variant="compact"
+            />
+            {currentProfileId && (
+                <div className="flex items-center gap-2 bg-neutral-800 px-4 py-2 rounded-full border border-yellow-900/50 shadow-lg">
+                    <Zap className="w-4 h-4 text-yellow-500" />
+                    <span className="text-yellow-500 font-bold text-lg">{progress.techPoints}</span>
+                </div>
+            )}
+        </div>
       </header>
 
       <div className="flex-1 relative">
@@ -206,6 +240,8 @@ function App() {
                 onNavigate={(v, m) => handleNavigate(v as ViewState, m)}
                 isDevMode={isDevMode}
                 onToggleDevMode={() => setIsDevMode(!isDevMode)}
+                soundSettings={soundSettings}
+                onUpdateSoundSettings={handleUpdateSoundSettings}
             />
         )}
 
