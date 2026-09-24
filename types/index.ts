@@ -223,3 +223,16 @@ export interface CurrencyPopup {
   vx: number;           // slight horizontal drift
 }
 
+export interface StatusFeedbackPopup {
+  id: string;
+  x: number;
+  y: number;
+  text: string;
+  color: string;
+  glowColor: string;
+  lifespan: number;
+  maxLifespan: number;
+  vy: number;
+  vx: number;
+}
+

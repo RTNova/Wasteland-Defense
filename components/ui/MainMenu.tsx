@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { BookOpen, Map as MapIcon, ShoppingBag, Terminal, Infinity as InfinityIcon, Trophy } from 'lucide-react';
+import { BookOpen, Map as MapIcon, ShoppingBag, Terminal, Infinity as InfinityIcon, Trophy, User, Users, Trash2, AlertTriangle, ShieldAlert } from 'lucide-react';
 import { soundManager, SoundSettings } from '../../config/soundManager';
 import { SoundSettingsPanel } from './SoundSettingsPanel';
 
-type ViewState = 'MENU' | 'MAP_SELECT' | 'SHOP' | 'BESTIARY' | 'ACHIEVEMENTS';
+type ViewState = 'MENU' | 'MAP_SELECT' | 'SHOP' | 'BESTIARY' | 'ACHIEVEMENTS' | 'PROFILES';
 
 interface MainMenuProps {
     onNavigate: (view: ViewState, mode?: 'STANDARD' | 'ENDLESS') => void;
@@ -13,6 +13,9 @@ interface MainMenuProps {
     onUpdateSoundSettings?: (settings: Partial<SoundSettings>) => void;
     unlockedAchievementsCount?: number;
     totalAchievementsCount?: number;
+    currentProfileName?: string;
+    onSwitchProfile?: () => void;
+    onDeleteCurrentProfile?: () => void;
 }
 
 export const MainMenu: React.FC<MainMenuProps> = ({ 
@@ -22,9 +25,13 @@ export const MainMenu: React.FC<MainMenuProps> = ({
   soundSettings: externalSoundSettings,
   onUpdateSoundSettings: externalOnUpdateSoundSettings,
   unlockedAchievementsCount = 0,
-  totalAchievementsCount = 12
+  totalAchievementsCount = 12,
+  currentProfileName,
+  onSwitchProfile,
+  onDeleteCurrentProfile
 }) => {
   const [internalSoundSettings, setInternalSoundSettings] = useState<SoundSettings>(() => soundManager.getSettings());
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
 
   const currentSettings = externalSoundSettings || internalSoundSettings;
 
@@ -44,6 +51,49 @@ export const MainMenu: React.FC<MainMenuProps> = ({
   return (
     <main className="max-w-md mx-auto p-6 h-full flex flex-col justify-center animate-in fade-in zoom-in duration-500">
         
+        {/* Active Commander Profile Header */}
+        {currentProfileName && (
+          <div className="bg-neutral-900/90 border border-neutral-700/80 rounded-xl p-3 flex items-center justify-between shadow-xl mb-4 backdrop-blur">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-full bg-blue-950/80 border border-blue-500/60 flex items-center justify-center text-blue-400 shrink-0">
+                <User className="w-5 h-5" />
+              </div>
+              <div className="text-left">
+                <div className="text-[10px] uppercase font-bold text-neutral-400 tracking-wider">COMMANDER</div>
+                <div className="text-sm font-bold text-white tracking-wide truncate max-w-[120px] sm:max-w-[160px]">{currentProfileName}</div>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              {onSwitchProfile && (
+                <button
+                  onClick={() => {
+                    soundManager.playClick();
+                    onSwitchProfile();
+                  }}
+                  className="px-2.5 py-1.5 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white rounded border border-neutral-700 text-xs font-bold transition flex items-center gap-1.5"
+                  title="Switch to another commander profile"
+                >
+                  <Users className="w-3.5 h-3.5 text-blue-400" />
+                  <span className="hidden sm:inline">Switch</span>
+                </button>
+              )}
+              {onDeleteCurrentProfile && (
+                <button
+                  onClick={() => {
+                    soundManager.playClick();
+                    setShowDeleteModal(true);
+                  }}
+                  className="px-2.5 py-1.5 bg-red-950/40 hover:bg-red-900/60 text-red-400 hover:text-red-200 rounded border border-red-800/60 text-xs font-bold transition flex items-center gap-1.5"
+                  title="Delete this commander profile"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Delete Profile</span>
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
         <div className="grid gap-4">
             
             {/* Play Button (Standard) */}
@@ -153,6 +203,55 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                  DEV MODE: {isDevMode ? 'ON' : 'OFF'}
              </button>
         </div>
+
+        {/* Delete Profile Confirmation Modal on Main Menu */}
+        {showDeleteModal && (
+          <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+            <div className="bg-neutral-900 border-2 border-red-600/80 rounded-xl max-w-md w-full p-6 shadow-[0_0_50px_rgba(239,68,68,0.3)] animate-in zoom-in-95 duration-200">
+              <div className="flex items-center gap-3 text-red-500 mb-4">
+                <div className="p-2.5 bg-red-950/80 border border-red-800 rounded-lg">
+                  <AlertTriangle className="w-6 h-6 text-red-400" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold font-title tracking-wider text-white">DELETE PROFILE?</h3>
+                  <p className="text-xs text-red-400 font-mono">Irreversible Action</p>
+                </div>
+              </div>
+
+              <p className="text-sm text-neutral-300 mb-3">
+                Are you sure you want to permanently delete profile <strong className="text-white bg-neutral-800 px-2 py-0.5 rounded border border-neutral-700 font-mono">{currentProfileName}</strong>?
+              </p>
+
+              <div className="p-2.5 bg-red-950/30 border border-red-900/40 rounded text-xs text-red-300 font-mono flex items-center gap-2 mb-6">
+                <ShieldAlert className="w-4 h-4 shrink-0 text-red-400" />
+                <span>All mission records, talent points, and upgrades will be deleted. You will be returned to the Commander Selection screen.</span>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    soundManager.playClick();
+                    setShowDeleteModal(false);
+                  }}
+                  className="flex-1 py-2.5 px-4 bg-neutral-800 hover:bg-neutral-700 text-neutral-200 font-bold rounded-lg text-xs uppercase tracking-wider transition border border-neutral-700"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    soundManager.playClick();
+                    setShowDeleteModal(false);
+                    if (onDeleteCurrentProfile) onDeleteCurrentProfile();
+                  }}
+                  className="flex-1 py-2.5 px-4 bg-red-600 hover:bg-red-500 text-white font-bold rounded-lg text-xs uppercase tracking-wider shadow-lg shadow-red-900/50 transition flex items-center justify-center gap-2 border border-red-500"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  <span>Confirm Delete</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
     </main>
   );
 };

@@ -1,5 +1,5 @@
 
-import { Enemy, Tower, Projectile, EnemyType, TowerType, GroundEffect } from '../../types/index';
+import { Enemy, Tower, Projectile, EnemyType, TowerType, GroundEffect, StatusFeedbackPopup } from '../../types/index';
 
 // Helper Types
 interface DrawContext {
@@ -397,6 +397,254 @@ export const drawTower = ({ ctx, frame }: DrawContext, tower: Tower, isGhost: bo
     ctx.restore();
 };
 
+// --- SUB-ROUTINE: VISUAL STATUS EFFECT INDICATORS ABOVE MUTANTS ---
+interface ActiveStatusBadge {
+  id: string;
+  borderColor: string;
+  glowColor: string;
+  bgColor: string;
+  progressPct?: number; // 0 to 1 for remaining duration arc
+  drawGlyph: (ctx: CanvasRenderingContext2D, frame: number) => void;
+}
+
+const drawStatusIndicatorsAboveEnemy = (ctx: CanvasRenderingContext2D, enemy: Enemy, frame: number, x: number, barY: number) => {
+  const badges: ActiveStatusBadge[] = [];
+
+  // 1. BURNING (Flamethrower, Napalm Mortar, Laser Red Mode)
+  if (enemy.burnTimer && enemy.burnTimer > 0) {
+    const isBlue = (enemy.healingReduction || 0) > 0.5;
+    const progress = Math.max(0, Math.min(1, enemy.burnTimer / 180));
+    badges.push({
+      id: 'BURN',
+      borderColor: isBlue ? '#38bdf8' : '#f97316',
+      glowColor: isBlue ? '#0284c7' : '#ea580c',
+      bgColor: isBlue ? 'rgba(8, 47, 73, 0.95)' : 'rgba(67, 20, 7, 0.95)',
+      progressPct: progress,
+      drawGlyph: (c, f) => {
+        const flick = Math.sin(f * 0.4) * 1.2;
+        // Outer Flame
+        c.beginPath();
+        c.moveTo(-3.5, 3.5);
+        c.quadraticCurveTo(-4.5, 0, -2, -1.5);
+        c.quadraticCurveTo(-2.5, -4.5 + flick, 0, -5.5 + flick);
+        c.quadraticCurveTo(2.5, -4.5 + flick, 2, -1.5);
+        c.quadraticCurveTo(4.5, 0, 3.5, 3.5);
+        c.quadraticCurveTo(0, 4.5, -3.5, 3.5);
+        c.closePath();
+        c.fillStyle = isBlue ? '#60a5fa' : '#f97316';
+        c.fill();
+        // Inner Flame Core
+        c.beginPath();
+        c.moveTo(-1.8, 2.5);
+        c.quadraticCurveTo(-2, 0, 0, -2.5 + flick * 0.5);
+        c.quadraticCurveTo(2, 0, 1.8, 2.5);
+        c.closePath();
+        c.fillStyle = isBlue ? '#e0f2fe' : '#fef08a';
+        c.fill();
+      }
+    });
+  }
+
+  // 2. FROZEN / STUNNED (Tesla Lvl 7, Pulverizer Stun, Ice Mage)
+  if (enemy.frozen && enemy.frozen > 0) {
+    const progress = Math.max(0, Math.min(1, enemy.frozen / 45));
+    badges.push({
+      id: 'FROZEN',
+      borderColor: '#67e8f9',
+      glowColor: '#0284c7',
+      bgColor: 'rgba(8, 47, 73, 0.95)',
+      progressPct: progress,
+      drawGlyph: (c, f) => {
+        c.save();
+        c.rotate(Math.sin(f * 0.08) * 0.2);
+        c.strokeStyle = '#e0f2fe';
+        c.lineWidth = 1.3;
+        c.lineCap = 'round';
+        // 6-spoke snowflake crystal
+        for (let i = 0; i < 3; i++) {
+          const angle = (i * Math.PI) / 3;
+          c.beginPath();
+          c.moveTo(-Math.cos(angle) * 4.5, -Math.sin(angle) * 4.5);
+          c.lineTo(Math.cos(angle) * 4.5, Math.sin(angle) * 4.5);
+          c.stroke();
+        }
+        // Center sparkling core
+        c.fillStyle = '#ffffff';
+        c.beginPath();
+        c.arc(0, 0, 1.3, 0, Math.PI * 2);
+        c.fill();
+        c.restore();
+      }
+    });
+  }
+
+  // 3. SLOWED (Chemist Glue Bomb, Acid Pool, Blue Laser, Cryo Slow)
+  if (enemy.slowFactor && enemy.slowFactor < 1 && (!enemy.frozen || enemy.frozen <= 0)) {
+    badges.push({
+      id: 'SLOWED',
+      borderColor: '#0ea5e9',
+      glowColor: '#0369a1',
+      bgColor: 'rgba(12, 74, 110, 0.95)',
+      drawGlyph: (c, f) => {
+        const slide = (f * 0.12) % 2;
+        c.fillStyle = '#38bdf8';
+        // Top Chevron
+        c.beginPath();
+        c.moveTo(-3.5, -3.5 + slide);
+        c.lineTo(0, -1 + slide);
+        c.lineTo(3.5, -3.5 + slide);
+        c.lineTo(0, 0.5 + slide);
+        c.closePath();
+        c.fill();
+        // Bottom Chevron
+        c.beginPath();
+        c.moveTo(-3.5, 0 + slide);
+        c.lineTo(0, 2.5 + slide);
+        c.lineTo(3.5, 0 + slide);
+        c.lineTo(0, 4 + slide);
+        c.closePath();
+        c.fill();
+      }
+    });
+  }
+
+  // 4. POISON / ACID DoT (Chemist Lvl 7+ Dark Poison)
+  if (enemy.poisonDoT && enemy.poisonDoT > 0) {
+    badges.push({
+      id: 'POISON',
+      borderColor: '#4ade80',
+      glowColor: '#16a34a',
+      bgColor: 'rgba(20, 83, 45, 0.95)',
+      drawGlyph: (c, f) => {
+        // Toxic droplet
+        c.fillStyle = '#22c55e';
+        c.beginPath();
+        c.arc(0, 1, 3.2, 0, Math.PI * 2);
+        c.fill();
+        c.beginPath();
+        c.moveTo(-2.8, 0);
+        c.lineTo(0, -4.5);
+        c.lineTo(2.8, 0);
+        c.closePath();
+        c.fill();
+        // Bubbling effervescence
+        const bubbleY = -0.5 - ((f * 0.2) % 3.5);
+        c.fillStyle = '#bbf7d0';
+        c.beginPath();
+        c.arc(0.8, bubbleY, 0.9, 0, Math.PI * 2);
+        c.fill();
+      }
+    });
+  }
+
+  // 5. VULNERABLE (Sniper Ranger Lvl 7 Pierce)
+  if (enemy.vulnerable && enemy.vulnerable > 0) {
+    const progress = Math.max(0, Math.min(1, enemy.vulnerable / 180));
+    badges.push({
+      id: 'VULNERABLE',
+      borderColor: '#ef4444',
+      glowColor: '#dc2626',
+      bgColor: 'rgba(69, 10, 10, 0.95)',
+      progressPct: progress,
+      drawGlyph: (c, f) => {
+        c.strokeStyle = '#f87171';
+        c.lineWidth = 1.2;
+        // Reticle ring
+        c.beginPath();
+        c.arc(0, 0, 3.8, 0, Math.PI * 2);
+        c.stroke();
+        // 4 crosshair ticks
+        c.beginPath();
+        c.moveTo(0, -5); c.lineTo(0, -3.2);
+        c.moveTo(0, 3.2); c.lineTo(0, 5);
+        c.moveTo(-5, 0); c.lineTo(-3.2, 0);
+        c.moveTo(3.2, 0); c.lineTo(5, 0);
+        c.stroke();
+        // Center pip
+        c.fillStyle = '#ef4444';
+        c.beginPath();
+        c.arc(0, 0, 1.2 + Math.sin(f * 0.25) * 0.4, 0, Math.PI * 2);
+        c.fill();
+      }
+    });
+  }
+
+  // 6. ARMOR BROKEN (Pulverizer Shockwave Lvl 7)
+  if (enemy.armorBroken) {
+    badges.push({
+      id: 'ARMOR_BROKEN',
+      borderColor: '#f59e0b',
+      glowColor: '#d97706',
+      bgColor: 'rgba(69, 26, 3, 0.95)',
+      drawGlyph: (c) => {
+        // Cracked Shield
+        c.fillStyle = '#f59e0b';
+        c.beginPath();
+        c.moveTo(-3.5, -3.5);
+        c.lineTo(3.5, -3.5);
+        c.lineTo(3.5, 0);
+        c.quadraticCurveTo(0, 4.5, -3.5, 0);
+        c.closePath();
+        c.fill();
+        // Jagged fissure crack
+        c.strokeStyle = '#18181b';
+        c.lineWidth = 1;
+        c.beginPath();
+        c.moveTo(0, -3.5);
+        c.lineTo(-1.2, -0.8);
+        c.lineTo(1.2, 1);
+        c.lineTo(0, 3.8);
+        c.stroke();
+      }
+    });
+  }
+
+  if (badges.length === 0) return;
+
+  const badgeRadius = 7.5;
+  const badgeSpacing = 17;
+  const totalW = (badges.length - 1) * badgeSpacing;
+  const startX = x - totalW / 2;
+  const badgeCenterY = barY - 11; // Positioned right above the health bar
+
+  badges.forEach((b, idx) => {
+    const bx = startX + idx * badgeSpacing;
+    const by = badgeCenterY + Math.sin(frame * 0.12 + idx * 1.5) * 1.2;
+
+    ctx.save();
+    ctx.translate(bx, by);
+
+    // Glow & Backdrop Capsule
+    ctx.shadowColor = b.glowColor;
+    ctx.shadowBlur = 6;
+    ctx.fillStyle = b.bgColor;
+    ctx.beginPath();
+    ctx.arc(0, 0, badgeRadius, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Outline Border
+    ctx.strokeStyle = b.borderColor;
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+
+    // Remaining duration ring if applicable
+    if (b.progressPct !== undefined && b.progressPct > 0) {
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.arc(0, 0, badgeRadius - 0.7, -Math.PI / 2, -Math.PI / 2 + (Math.PI * 2 * b.progressPct));
+      ctx.stroke();
+    }
+
+    // Inner Glyph
+    ctx.shadowBlur = 0;
+    b.drawGlyph(ctx, frame);
+
+    ctx.restore();
+  });
+};
+
 export const drawEnemy = ({ ctx, frame }: DrawContext, enemy: Enemy) => {
     const { x, y, radius, color, health, maxHealth, type, slowFactor, burnTimer } = enemy;
 
@@ -449,7 +697,7 @@ export const drawEnemy = ({ ctx, frame }: DrawContext, enemy: Enemy) => {
         ctx.globalAlpha = 1;
     }
 
-    // 2. BURN EFFECT
+    // 2. BURN EFFECT (Base Flames + Rising Ember Sparks)
     if (burnTimer && burnTimer > 0) {
         const isBlue = (enemy.healingReduction || 0) > 0.5;
         ctx.beginPath();
@@ -473,16 +721,29 @@ export const drawEnemy = ({ ctx, frame }: DrawContext, enemy: Enemy) => {
                 : `rgba(254, 215, 170, ${1-progress})`;
              ctx.fill();
         }
+
+        // Drifting fire embers
+        for(let i=0; i<3; i++) {
+            const emberOffset = (frame * 1.5 + (i * 17)) % 30;
+            const ex = x + Math.sin(frame * 0.1 + i) * radius * 0.8;
+            const ey = y - (emberOffset / 30) * (radius + 15);
+            ctx.fillStyle = isBlue ? '#38bdf8' : '#fbbf24';
+            ctx.fillRect(ex, ey, 1.5, 1.5);
+        }
     }
 
+    // 3. SLOWED EFFECT (Frost puddle & cold snowflake particles)
     if (slowFactor && slowFactor < 1 && (!enemy.frozen || enemy.frozen <= 0)) {
         ctx.beginPath();
         ctx.ellipse(x, y + radius * 0.8, radius * 1.2, radius * 0.4, 0, 0, Math.PI*2);
-        ctx.fillStyle = 'rgba(186, 230, 253, 0.3)';
+        ctx.fillStyle = 'rgba(186, 230, 253, 0.35)';
         ctx.fill();
+        ctx.strokeStyle = 'rgba(56, 189, 248, 0.5)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
 
         const particleCount = 3;
-        ctx.fillStyle = '#e0f2fe'; 
+        ctx.fillStyle = '#bae6fd'; 
         for(let i=0; i<particleCount; i++) {
             const angle = (frame * -0.05) + (i * (Math.PI * 2 / particleCount));
             const px = x + Math.cos(angle) * (radius + 5);
@@ -496,6 +757,7 @@ export const drawEnemy = ({ ctx, frame }: DrawContext, enemy: Enemy) => {
         }
     }
 
+    // 4. POISON EFFECT
     if (enemy.poisonDoT && enemy.poisonDoT > 0) {
         ctx.beginPath();
         ctx.arc(x, y, radius, 0, Math.PI*2);
@@ -514,23 +776,53 @@ export const drawEnemy = ({ ctx, frame }: DrawContext, enemy: Enemy) => {
         }
     }
 
+    // 5. FROZEN CRYSTALLINE ENCASEMENT (Tesla Lvl 7 / Pulverizer / Ice Mage)
     if (enemy.frozen && enemy.frozen > 0) {
+         ctx.save();
+         // Hexagonal frost crystal shell
+         ctx.fillStyle = 'rgba(186, 230, 253, 0.45)';
+         ctx.strokeStyle = '#67e8f9';
+         ctx.lineWidth = 1.8;
+         ctx.shadowColor = '#38bdf8';
+         ctx.shadowBlur = 8;
+         const iceR = radius + 3.5;
+         ctx.beginPath();
+         for (let i = 0; i < 6; i++) {
+              const a = (i * Math.PI) / 3;
+              const ix = x + Math.cos(a) * iceR;
+              const iy = y + Math.sin(a) * iceR;
+              if (i === 0) ctx.moveTo(ix, iy);
+              else ctx.lineTo(ix, iy);
+         }
+         ctx.closePath();
+         ctx.fill();
+         ctx.stroke();
+
+         // Frost gleam highlight
+         ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+         ctx.lineWidth = 1.5;
+         ctx.beginPath();
+         ctx.moveTo(x - iceR * 0.4, y - iceR * 0.5);
+         ctx.lineTo(x + iceR * 0.3, y - iceR * 0.7);
+         ctx.stroke();
+         ctx.restore();
+
+         // Electric/Frost arcs
          ctx.strokeStyle = '#d8b4fe'; 
-         ctx.lineWidth = 2;
+         ctx.lineWidth = 1.5;
          ctx.shadowColor = '#a855f7';
          ctx.shadowBlur = 5;
-         
-         const segments = 3;
+         const segments = 2;
          for(let i=0; i<segments; i++) {
               ctx.beginPath();
               const startAngle = Math.random() * Math.PI * 2;
               let cx = x + Math.cos(startAngle) * radius;
               let cy = y + Math.sin(startAngle) * radius;
               ctx.moveTo(cx, cy);
-              const steps = 5;
+              const steps = 4;
               for(let j=0; j<steps; j++) {
-                  cx += (Math.random() - 0.5) * 10;
-                  cy += (Math.random() - 0.5) * 10;
+                  cx += (Math.random() - 0.5) * 8;
+                  cy += (Math.random() - 0.5) * 8;
                   ctx.lineTo(cx, cy);
               }
               ctx.stroke();
@@ -538,47 +830,33 @@ export const drawEnemy = ({ ctx, frame }: DrawContext, enemy: Enemy) => {
          ctx.shadowBlur = 0;
     }
 
-    if (enemy.vulnerable && enemy.vulnerable > 0) {
-        const floatY = y - radius - 15 - Math.sin(frame * 0.1) * 3;
-        ctx.save();
-        ctx.translate(x, floatY);
-        ctx.fillStyle = 'rgba(239, 68, 68, 0.8)';
-        ctx.strokeStyle = '#fff';
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.moveTo(-6, -6);
-        ctx.lineTo(6, -6);
-        ctx.lineTo(6, 0);
-        ctx.quadraticCurveTo(0, 8, -6, 0);
-        ctx.closePath();
-        ctx.fill();
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.moveTo(0, -6);
-        ctx.lineTo(-2, -2);
-        ctx.lineTo(2, 2);
-        ctx.lineTo(0, 6);
-        ctx.strokeStyle = '#000';
-        ctx.stroke();
-        ctx.restore();
-    }
-
+    // 6. ARMOR BROKEN CRACK ON BODY
     if (enemy.armorBroken) {
         ctx.save();
         ctx.translate(x, y);
-        ctx.strokeStyle = '#fff';
-        ctx.lineWidth = 1;
+        ctx.strokeStyle = '#f59e0b';
+        ctx.lineWidth = 1.5;
         ctx.beginPath();
-        ctx.moveTo(-4, -4); ctx.lineTo(0, 0); ctx.lineTo(-2, 4);
+        ctx.moveTo(-radius * 0.6, -radius * 0.4); 
+        ctx.lineTo(-radius * 0.1, 0); 
+        ctx.lineTo(-radius * 0.4, radius * 0.5);
         ctx.stroke();
         ctx.restore();
     }
 
+    // Main Mutant Body
     ctx.beginPath();
     ctx.arc(x, y, radius, 0, Math.PI * 2);
     ctx.fillStyle = color;
     ctx.fill();
-    ctx.strokeStyle = (enemy.frozen && enemy.frozen > 0) ? '#fff' : '#000';
+
+    // Cold ice overlay if frozen
+    if (enemy.frozen && enemy.frozen > 0) {
+        ctx.fillStyle = 'rgba(186, 230, 253, 0.4)';
+        ctx.fill();
+    }
+
+    ctx.strokeStyle = (enemy.frozen && enemy.frozen > 0) ? '#67e8f9' : '#000';
     ctx.lineWidth = 1;
     ctx.stroke();
     
@@ -590,6 +868,7 @@ export const drawEnemy = ({ ctx, frame }: DrawContext, enemy: Enemy) => {
         ctx.stroke();
     }
 
+    // Health Bar
     const hpPct = Math.max(0, health / maxHealth);
     const barW = 24;
     const barH = 4;
@@ -606,6 +885,9 @@ export const drawEnemy = ({ ctx, frame }: DrawContext, enemy: Enemy) => {
     ctx.strokeStyle = '#000';
     ctx.lineWidth = 1;
     ctx.strokeRect(x - barW/2, barY, barW, barH);
+
+    // --- RENDER VISUAL STATUS EFFECT INDICATORS (BURNING, FROZEN, SLOWED, POISON, VULNERABLE, ARMOR BROKEN) ABOVE MUTANT ---
+    drawStatusIndicatorsAboveEnemy(ctx, enemy, frame, x, barY);
 };
 
 export const drawProjectile = ({ ctx, frame }: DrawContext, p: Projectile, enemies: Enemy[]) => {
@@ -827,3 +1109,56 @@ export const drawGroundEffect = ({ ctx, frame }: DrawContext, g: GroundEffect) =
     }
     ctx.globalAlpha = 1;
 };
+
+export const drawStatusPopups = (
+  { ctx }: { ctx: CanvasRenderingContext2D },
+  popups: StatusFeedbackPopup[]
+) => {
+  if (!popups || popups.length === 0) return;
+  ctx.save();
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font = 'bold 11px monospace';
+
+  popups.forEach(popup => {
+    const age = popup.maxLifespan - popup.lifespan;
+    let alpha = 1.0;
+    if (age < 6) {
+      alpha = age / 6;
+    } else if (popup.lifespan < 14) {
+      alpha = popup.lifespan / 14;
+    }
+
+    const scale = age < 6 ? 1.0 + (1 - age / 6) * 0.35 : 1.0;
+
+    ctx.save();
+    ctx.translate(popup.x, popup.y);
+    ctx.scale(scale, scale);
+    ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
+
+    // Dark backdrop capsule for maximum contrast
+    ctx.shadowColor = popup.glowColor;
+    ctx.shadowBlur = 8;
+    ctx.fillStyle = 'rgba(10, 15, 29, 0.9)';
+    ctx.strokeStyle = popup.color;
+    ctx.lineWidth = 1.2;
+
+    const textWidth = ctx.measureText(popup.text).width;
+    const w = textWidth + 12;
+    const h = 18;
+
+    ctx.beginPath();
+    ctx.roundRect(-w / 2, -h / 2, w, h, 4);
+    ctx.fill();
+    ctx.stroke();
+
+    // Text label
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = popup.color;
+    ctx.fillText(popup.text, 0, 0.5);
+
+    ctx.restore();
+  });
+  ctx.restore();
+};
+

@@ -1,10 +1,11 @@
 
 import React, { useEffect, useRef, useState } from 'react';
-import { Enemy, Tower, Projectile, GameMap, EnemyType, TowerType, Point, GlobalUpgrades, DragState, GroundEffect, CurrencyPopup, DifficultyLevel } from '../../types/index';
+import { Enemy, Tower, Projectile, GameMap, EnemyType, TowerType, Point, GlobalUpgrades, DragState, GroundEffect, CurrencyPopup, StatusFeedbackPopup, DifficultyLevel } from '../../types/index';
 import { CANVAS_HEIGHT, CANVAS_WIDTH, ENEMY_STATS, TOWER_DEFINITIONS, generateWaves } from '../../config/constants';
-import { Heart, Zap, Crosshair, Play, Pause, LogOut, FastForward, Repeat, ArrowUp, Terminal, Skull, Minimize2, Maximize2, Sword, Infinity as InfinityIcon, BarChart3, CheckCircle2, ShieldAlert } from 'lucide-react';
-import { drawTower, drawEnemy, drawProjectile, drawGroundEffect } from './RenderUtils';
+import { Heart, Zap, Crosshair, Play, Pause, LogOut, FastForward, Repeat, ArrowUp, Terminal, Skull, Minimize2, Maximize2, Sword, Infinity as InfinityIcon, BarChart3, CheckCircle2, ShieldAlert, Sliders, X } from 'lucide-react';
+import { drawTower, drawEnemy, drawProjectile, drawGroundEffect, drawStatusPopups } from './RenderUtils';
 import { PostWaveSummaryModal, WaveSummaryData } from '../ui/PostWaveSummaryModal';
+import { GameMenuModal } from '../ui/GameMenuModal';
 import { soundManager, SoundSettings } from '../../config/soundManager';
 import { SoundSettingsPanel } from '../ui/SoundSettingsPanel';
 import { getDifficultyConfig } from '../../config/difficulty';
@@ -79,6 +80,8 @@ interface GameCanvasProps {
   onWin: (reward: number, difficulty?: DifficultyLevel) => void;
   onAddGlobalPoints?: (amount: number) => void;
   onReportCombatStats?: (stats: { mutantsKilled?: number; bossesKilled?: number; wavesCleared?: number; endlessWaveRecord?: number; towersBuilt?: number; techPointsEarned?: number }) => void;
+  onAutoSaveRound?: (roundNumber: number) => void;
+  onManualSave?: () => void;
   isDevMode?: boolean;
   initialIsEndless?: boolean;
 }
@@ -111,6 +114,8 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   onWin, 
   onAddGlobalPoints, 
   onReportCombatStats,
+  onAutoSaveRound,
+  onManualSave,
   isDevMode = false, 
   initialIsEndless = false 
 }) => {
@@ -123,6 +128,35 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   const projectilesRef = useRef<Projectile[]>([]);
   const groundEffectsRef = useRef<GroundEffect[]>([]); 
   const currencyPopupsRef = useRef<CurrencyPopup[]>([]);
+  const statusPopupsRef = useRef<StatusFeedbackPopup[]>([]);
+  const lastStatusPopupTimeRef = useRef<Map<string, number>>(new Map());
+
+  const triggerStatusPopup = (
+    enemy: Enemy,
+    type: 'BURN' | 'BLUEFIRE' | 'FROZEN' | 'SLOWED' | 'POISON' | 'VULNERABLE' | 'SHATTER',
+    text: string,
+    color: string,
+    glowColor: string
+  ) => {
+    const key = `${enemy.id}_${type}`;
+    const now = frameRef.current;
+    const lastTime = lastStatusPopupTimeRef.current.get(key) || 0;
+    if (now - lastTime < 45) return; // Debounce per enemy/status to keep combat clear and readable
+    lastStatusPopupTimeRef.current.set(key, now);
+
+    statusPopupsRef.current.push({
+      id: Math.random().toString(),
+      x: enemy.x + (Math.random() - 0.5) * 6,
+      y: enemy.y - enemy.radius - 14,
+      text,
+      color,
+      glowColor,
+      lifespan: 48,
+      maxLifespan: 48,
+      vy: -0.9,
+      vx: (Math.random() - 0.5) * 0.4,
+    });
+  };
   const livesRef = useRef<number>(100); 
   const frameRef = useRef<number>(0);
   const requestRef = useRef<number>(0);
@@ -171,6 +205,20 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   const [isPaused, setIsPaused] = useState(false);
   const [hoveredTowerType, setHoveredTowerType] = useState<TowerType | null>(null);
   const [notification, setNotification] = useState<{text: string, opacity: number} | null>(null);
+  const notificationTimeoutRef = useRef<any>(null);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [showPrepBanner, setShowPrepBanner] = useState(false);
+  const prepBannerTimeoutRef = useRef<any>(null);
+
+  const showGameNotification = (text: string, durationMs: number = 3000) => {
+    setNotification({ text, opacity: 1 });
+    if (notificationTimeoutRef.current) {
+      clearTimeout(notificationTimeoutRef.current);
+    }
+    notificationTimeoutRef.current = setTimeout(() => {
+      setNotification(null);
+    }, durationMs);
+  };
   
   // Dev Tools State
   const [isDevOpen, setIsDevOpen] = useState(true);
@@ -203,6 +251,8 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   // --- STATS TRACKING & POST-WAVE SUMMARY REFS & STATE ---
   const waveStatsRef = useRef({
     enemiesDefeated: 0,
+    bossesDefeated: 0,
+    towersBuilt: 0,
     enemyTypeBreakdown: {} as Record<string, number>,
     moneyEarned: 0,
     damageDealt: 0,
@@ -562,6 +612,8 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     waveStartingLivesRef.current = livesRef.current;
     waveStatsRef.current = {
       enemiesDefeated: 0,
+      bossesDefeated: 0,
+      towersBuilt: 0,
       enemyTypeBreakdown: {},
       moneyEarned: 0,
       damageDealt: 0,
@@ -601,6 +653,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       waveStatsRef.current.enemiesDefeated++;
       totalStatsRef.current.enemiesDefeated++;
       if (enemy.type === EnemyType.BOSS) {
+        waveStatsRef.current.bossesDefeated = (waveStatsRef.current.bossesDefeated || 0) + 1;
         totalStatsRef.current.bossesDefeated++;
       }
 
@@ -612,12 +665,8 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
 
       waveStatsRef.current.moneyEarned += enemy.reward;
 
-      if (onReportCombatStats) {
-        onReportCombatStats({
-          mutantsKilled: 1,
-          bossesKilled: enemy.type === EnemyType.BOSS ? 1 : 0
-        });
-      }
+      // Notice: onReportCombatStats is intentionally NOT called here.
+      // Combat statistics and game progress are strictly saved upon round completion.
 
       handleEnemyDeath(enemy);
   };
@@ -676,12 +725,6 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
 
     frameRef.current++;
     
-    // Notification fade
-    if (notification) {
-        setNotification(prev => prev ? { ...prev, opacity: prev.opacity - 0.01 } : null);
-        if (notification.opacity <= 0) setNotification(null);
-    }
-    
     fogRef.current.forEach(p => {
       p.x += p.speed;
       if (p.x > CANVAS_WIDTH + p.size) p.x = -p.size;
@@ -711,6 +754,15 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
         popup.lifespan--;
     });
     currencyPopupsRef.current = currencyPopupsRef.current.filter(p => p.lifespan > 0);
+
+    // Update Floating Status Feedback Popups
+    statusPopupsRef.current.forEach(popup => {
+        popup.x += popup.vx;
+        popup.y += popup.vy;
+        popup.vy *= 0.98;
+        popup.lifespan--;
+    });
+    statusPopupsRef.current = statusPopupsRef.current.filter(p => p.lifespan > 0);
 
     if (waveActiveRef.current) {
         if (spawnQueueRef.current.length > 0) {
@@ -759,9 +811,9 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
 
           // In-game notification banner
           if (isEndless && currentWaveIndexRef.current > 0 && currentWaveIndexRef.current % 10 === 0) {
-            setNotification({ text: `BONUS: +${totalWaveTP} TECH POINTS`, opacity: 2.0 });
+            showGameNotification(`BONUS: +${totalWaveTP} TECH POINTS`, 3000);
           } else {
-            setNotification({ text: `WAVE ${waveNumJustFinished} CLEARED (+${totalWaveTP} TP)`, opacity: 2.0 });
+            showGameNotification(`WAVE ${waveNumJustFinished} CLEARED (+${totalWaveTP} TP)`, 3000);
           }
 
           // Calculate MVP Tower for this wave
@@ -821,10 +873,18 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
 
           if (onReportCombatStats) {
             onReportCombatStats({
+              mutantsKilled: waveStatsRef.current.enemiesDefeated,
+              bossesKilled: waveStatsRef.current.bossesDefeated || 0,
+              towersBuilt: waveStatsRef.current.towersBuilt || 0,
               wavesCleared: 1,
               endlessWaveRecord: isEndless ? waveNumJustFinished : 0,
               techPointsEarned: totalWaveTP
             });
+          }
+
+          // Auto-save progress strictly after every round!
+          if (onAutoSaveRound) {
+            onAutoSaveRound(waveNumJustFinished);
           }
 
           // Play victory fanfare chime
@@ -881,7 +941,21 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       groundEffectsRef.current.forEach(ge => {
           if (ge.type === 'ACID_POOL' || ge.type === 'FIRE_POOL') {
              if (getDistance(enemy, ge) < (ge.radius + enemy.radius)) {
-                 if (ge.type === 'ACID_POOL') slowed = true;
+                 if (ge.type === 'ACID_POOL') {
+                     slowed = true;
+                     triggerStatusPopup(enemy, 'SLOWED', '❄️ SLOWED (-50%)', '#38bdf8', '#0369a1');
+                     if (ge.isDarkPoison) {
+                         enemy.poisonDoT = 0.05;
+                         triggerStatusPopup(enemy, 'POISON', '🧪 TOXIC ACID', '#4ade80', '#16a34a');
+                     }
+                 } else if (ge.type === 'FIRE_POOL') {
+                     enemy.burnTimer = Math.max(enemy.burnTimer || 0, 90);
+                     enemy.burnDamage = Math.max(enemy.burnDamage || 0, 4);
+                     triggerStatusPopup(enemy, 'BURN', '🔥 BURN', '#f97316', '#ea580c');
+                     if (ge.slowFactor && ge.slowFactor < 1) {
+                         slowed = true;
+                     }
+                 }
                  applyDamage(enemy, ge.damagePerFrame);
                  if (enemy.health <= 0) {
                      setMoney(m => m + enemy.reward);
@@ -965,7 +1039,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
            // NINJA EFFECT: Paralyze towers if reaches end
            if (enemy.type === EnemyType.NINJA) {
                towersRef.current.forEach(t => t.stunnedTimer = 120); // 2 seconds global stun
-               setNotification({ text: "SYSTEM CRITICAL: TOWERS PARALYZED", opacity: 2.0 });
+               showGameNotification("SYSTEM CRITICAL: TOWERS PARALYZED", 3000);
            }
 
            const damage = enemy.damageToPlayer || 1;
@@ -1111,6 +1185,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
 
                if (tower.level >= 7) {
                    e.frozen = 45;
+                   triggerStatusPopup(e, 'FROZEN', '🧊 FROZEN!', '#67e8f9', '#0284c7');
                }
                if (e.health <= 0) {
                    setMoney(m => m + e.reward);
@@ -1157,7 +1232,11 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
                  applyDamage(e, effectiveDamage);
                  tower.totalDamage += effectiveDamage;
                  e.frozen = 30; // 0.5s Stun
-                 if (tower.level >= 7) e.armorBroken = true;
+                 triggerStatusPopup(e, 'FROZEN', '⚡ STUNNED!', '#67e8f9', '#0284c7');
+                 if (tower.level >= 7) {
+                     e.armorBroken = true;
+                     triggerStatusPopup(e, 'SHATTER', '💥 SHATTERED (+30%)', '#fbbf24', '#d97706');
+                 }
                  
                  if (e.health <= 0) {
                      setMoney(m => m + e.reward);
@@ -1241,10 +1320,12 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
                      if (tower.level >= 7) {
                          if (tower.laserMode === 'RED') {
                              enemy.burnTimer = 90; enemy.burnDamage = 10;
+                             triggerStatusPopup(enemy, 'BURN', '🔥 MELT BURN', '#f97316', '#ea580c');
                          } else {
                              groundEffectsRef.current.push({
                                  id: Math.random().toString(), x: enemy.x, y: enemy.y, radius: 1, lifespan: 90, type: 'ACID_POOL', damagePerFrame: 0, slowFactor: 0.5
                              });
+                             triggerStatusPopup(enemy, 'SLOWED', '❄️ CRYO SLOW', '#38bdf8', '#0369a1');
                          }
                      }
                      if (enemy.health <= 0) {
@@ -1341,6 +1422,11 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
               enemiesRef.current.forEach(e => {
                    if (getDistance(e, {x: p.endX!, y: p.endY!}) <= (p.splashRadius || 80)) {
                        applyDamage(e, p.damage);
+                       if (p.isExplosive) {
+                           e.burnTimer = 120;
+                           e.burnDamage = 6;
+                           triggerStatusPopup(e, 'BURN', '🔥 NAPALM BURN', '#f97316', '#ea580c');
+                       }
                        if (p.ownerId) {
                            const owner = towersRef.current.find(t => t.id === p.ownerId);
                            if (owner) owner.totalDamage += p.damage;
@@ -1425,9 +1511,18 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
                 enemy.burnDamage = 5; 
                 if (p.healingReduction) enemy.healingReduction = p.healingReduction;
                 else enemy.healingReduction = p.isBlueFire ? 0.7 : 0.3; 
+                if (p.isBlueFire) {
+                    triggerStatusPopup(enemy, 'BLUEFIRE', '🔷 BLUEFIRE (-70% HEAL)', '#38bdf8', '#0284c7');
+                } else {
+                    triggerStatusPopup(enemy, 'BURN', '🔥 BURN', '#f97316', '#ea580c');
+                }
             }
-            if (p.type === 'BULLET' && p.pierce > 1) {
-                enemy.vulnerable = 180; 
+            if (p.type === 'BULLET') {
+                const owner = towersRef.current.find(t => t.id === p.ownerId);
+                if ((owner && owner.type === TowerType.SNIPER && owner.level >= 7) || p.pierce > 1) {
+                    enemy.vulnerable = 180;
+                    triggerStatusPopup(enemy, 'VULNERABLE', '🎯 VULNERABLE (+15%)', '#f87171', '#dc2626');
+                }
             }
             let actualDamage = p.damage;
             if (p.type === 'ARROW' && p.acceleration && p.speed > 3) {
@@ -1677,6 +1772,11 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
         ctx.restore();
     }
 
+    // 6.6 Floating Combat Status Popups (Vivid status feedback capsules)
+    if (statusPopupsRef.current.length > 0) {
+        drawStatusPopups({ ctx }, statusPopupsRef.current);
+    }
+
     // 7. Drifting Fog Layer
     fogRef.current.forEach(f => {
         ctx.fillStyle = map.id === 'wasteland' ? `rgba(100, 255, 100, ${f.alpha})` : `rgba(200, 200, 200, ${f.alpha})`;
@@ -1767,7 +1867,31 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     return () => {
       if (requestRef.current) cancelAnimationFrame(requestRef.current);
     };
-  }, [gameOver, victory, map, dragState, selectedTowerId, upgrades, gameSpeed, isEndless, notification]); 
+  }, [gameOver, victory, map, dragState, selectedTowerId, upgrades, gameSpeed, isEndless]); 
+
+  // --- KEYBOARD SHORTCUTS: ESC / M for Menu ---
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') {
+        return;
+      }
+
+      if (e.code === 'Escape' || e.code === 'KeyM') {
+        if (isSummaryOpen) {
+          setIsSummaryOpen(false);
+          return;
+        }
+        setIsMenuOpen(prev => {
+          const next = !prev;
+          setIsPaused(next);
+          return next;
+        });
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isSummaryOpen]); 
 
   // --- INTERACTION HANDLERS (DRAG & DROP) ---
 
@@ -1874,9 +1998,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
                   totalDamage: 0
                 });
                 totalStatsRef.current.towersBuilt++;
-                if (onReportCombatStats) {
-                  onReportCombatStats({ towersBuilt: 1 });
-                }
+                waveStatsRef.current.towersBuilt = (waveStatsRef.current.towersBuilt || 0) + 1;
                 soundManager.playBuild();
             }
         }
@@ -1962,16 +2084,44 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
         {/* Global Notification */}
         {notification && (
             <div 
-                className="absolute top-1/4 left-1/2 -translate-x-1/2 bg-indigo-900/90 text-white px-6 py-3 rounded-full border border-indigo-500 shadow-[0_0_30px_rgba(99,102,241,0.5)] font-bold text-lg animate-bounce pointer-events-none z-50"
-                style={{ opacity: Math.min(1, notification.opacity) }}
+                className="absolute top-20 left-1/2 -translate-x-1/2 bg-indigo-900/90 text-white px-6 py-2.5 rounded-full border border-indigo-500 shadow-[0_0_30px_rgba(99,102,241,0.5)] font-bold text-sm sm:text-base animate-in fade-in slide-in-from-top-2 pointer-events-none z-50 transition-opacity duration-300 backdrop-blur-md"
             >
                 {notification.text}
             </div>
         )}
 
+        {/* TOP-RIGHT CONTROLS: DEBRIEF & MENU BUTTON */}
+        <div className="absolute top-4 right-4 flex items-center gap-2 z-40">
+            {waveSummary && !isSummaryOpen && (
+                <button
+                    onClick={() => {
+                        soundManager.playClick();
+                        setIsSummaryOpen(true);
+                    }}
+                    className="bg-neutral-900/90 hover:bg-neutral-800 border border-amber-500/40 text-amber-300 hover:text-white px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-mono font-bold shadow-xl backdrop-blur-md transition"
+                    title="View Combat Debrief"
+                >
+                    <BarChart3 className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Debrief</span>
+                </button>
+            )}
+            <button
+                onClick={() => {
+                    soundManager.playClick();
+                    setIsMenuOpen(true);
+                    setIsPaused(true);
+                }}
+                className="bg-neutral-900/90 hover:bg-neutral-800 border border-blue-500/60 hover:border-blue-400 text-neutral-100 hover:text-white px-3.5 py-1.5 rounded-lg flex items-center gap-2 text-xs font-mono font-bold shadow-xl backdrop-blur-md transition group"
+                title="Open Tactical Menu & Sound Settings (ESC or M)"
+            >
+                <Sliders className="w-3.5 h-3.5 text-amber-400 group-hover:rotate-45 transition-transform" />
+                <span>MENU</span>
+            </button>
+        </div>
+
         {/* DEV TOOLS PANEL */}
         {isDevMode && (
-            <div className={`absolute top-4 right-4 bg-black/90 backdrop-blur border border-purple-500/50 rounded p-2 text-xs z-40 shadow-2xl transition-all ${isDevOpen ? 'w-48' : 'w-auto'}`}>
+            <div className={`absolute top-14 right-4 bg-black/90 backdrop-blur border border-purple-500/50 rounded p-2 text-xs z-40 shadow-2xl transition-all ${isDevOpen ? 'w-48' : 'w-auto'}`}>
                 <div className="flex items-center justify-between gap-2 mb-2 border-b border-purple-800 pb-1">
                     <div className="flex items-center gap-2">
                          <Terminal className="w-3 h-3 text-purple-400" />
@@ -2058,16 +2208,19 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
           </div>
         )}
 
-        {/* PREPARATION BANNER (BETWEEN WAVES) */}
-        {waveSummary && !isSummaryOpen && !waveActiveRef.current && !gameOver && (
-          <div className="absolute top-16 left-1/2 -translate-x-1/2 z-30 bg-neutral-900/90 border border-neutral-700/80 px-4 py-2 rounded-full flex items-center gap-3 shadow-2xl backdrop-blur-md animate-in fade-in slide-in-from-top-2">
+        {/* PREPARATION BANNER (BETWEEN WAVES - AUTO-DISMISSES IN 3s OR VIA CLOSE BUTTON) */}
+        {waveSummary && !isSummaryOpen && !waveActiveRef.current && !gameOver && showPrepBanner && (
+          <div className="absolute top-16 left-1/2 -translate-x-1/2 z-30 bg-neutral-900/95 border border-neutral-700/90 px-4 py-2 rounded-full flex items-center gap-3 shadow-2xl backdrop-blur-md animate-in fade-in slide-in-from-top-2">
             <span className="text-xs text-neutral-300 font-mono flex items-center gap-1.5">
               <CheckCircle2 className="w-4 h-4 text-emerald-400" />
               Wave {waveSummary.waveNumber} Cleared
             </span>
             <span className="h-3 w-px bg-neutral-700" />
             <button
-              onClick={() => setIsSummaryOpen(true)}
+              onClick={() => {
+                soundManager.playClick();
+                setIsSummaryOpen(true);
+              }}
               className="text-xs text-amber-400 hover:text-amber-300 font-bold flex items-center gap-1 transition"
               title="Review combat log and performance statistics"
             >
@@ -2080,6 +2233,13 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
             >
               <Play className="w-3 h-3 fill-current" /> Deploy Wave {waveSummary.waveNumber + 1}
             </button>
+            <button
+              onClick={() => setShowPrepBanner(false)}
+              className="text-neutral-500 hover:text-neutral-300 p-0.5 rounded transition"
+              title="Dismiss notification"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
           </div>
         )}
 
@@ -2089,7 +2249,14 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
             summary={waveSummary}
             isOpen={isSummaryOpen}
             onNextWave={startNextWave}
-            onPrepareDefenses={() => setIsSummaryOpen(false)}
+            onPrepareDefenses={() => {
+              setIsSummaryOpen(false);
+              setShowPrepBanner(true);
+              if (prepBannerTimeoutRef.current) clearTimeout(prepBannerTimeoutRef.current);
+              prepBannerTimeoutRef.current = setTimeout(() => {
+                setShowPrepBanner(false);
+              }, 3000);
+            }}
             autoPlay={autoPlay}
             onToggleAutoPlay={() => setAutoPlay(prev => !prev)}
             onContinueEndless={() => {
@@ -2170,16 +2337,34 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
             </div>
         )}
 
-        <div className="hidden lg:flex items-center justify-between p-4 border-b border-neutral-700 bg-neutral-900">
-            <h1 className="text-xl font-title text-neutral-400 tracking-wider">COMMAND CENTER</h1>
-            <SoundSettingsPanel 
-                settings={inGameSoundSettings} 
-                onUpdateSettings={(newS) => {
-                    const saved = soundManager.saveSettings(newS);
-                    setInGameSoundSettings(saved);
-                }} 
-                variant="compact"
-            />
+        <div className="hidden lg:flex items-center justify-between p-3.5 border-b border-neutral-700 bg-neutral-900">
+            <h1 className="text-lg font-title text-neutral-400 tracking-wider">COMMAND CENTER</h1>
+            <div className="flex items-center gap-2">
+                <button
+                    onClick={() => {
+                        soundManager.playClick();
+                        setIsMenuOpen(true);
+                        setIsPaused(true);
+                    }}
+                    className="flex items-center gap-1.5 px-2.5 py-1 bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 text-neutral-300 hover:text-white rounded text-xs font-bold transition"
+                    title="Menu & Audio Settings (ESC)"
+                >
+                    <Sliders className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Menu</span>
+                </button>
+                <SoundSettingsPanel 
+                    settings={inGameSoundSettings} 
+                    onUpdateSettings={(newS) => {
+                        const saved = soundManager.saveSettings(newS);
+                        setInGameSoundSettings(saved);
+                    }} 
+                    variant="compact"
+                    onOpenFullMenu={() => {
+                        setIsMenuOpen(true);
+                        setIsPaused(true);
+                    }}
+                />
+            </div>
         </div>
 
         <div className="p-2 lg:p-4 grid grid-cols-2 gap-2 border-b border-neutral-800 bg-neutral-800">
@@ -2367,6 +2552,37 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
             )}
         </div>
       </div>
+
+      {/* TACTICAL GAME MENU MODAL */}
+      <GameMenuModal
+        isOpen={isMenuOpen}
+        onClose={() => {
+          setIsMenuOpen(false);
+          setIsPaused(false);
+        }}
+        soundSettings={inGameSoundSettings}
+        onUpdateSoundSettings={(newS) => {
+          const saved = soundManager.saveSettings(newS);
+          setInGameSoundSettings(saved);
+        }}
+        onSaveGame={() => {
+          if (onManualSave) {
+            onManualSave();
+          } else if (onAutoSaveRound) {
+            onAutoSaveRound(wave);
+          }
+        }}
+        autoPlay={autoPlay}
+        onToggleAutoPlay={() => setAutoPlay(prev => !prev)}
+        gameSpeed={gameSpeed}
+        onToggleSpeed={() => setGameSpeed(s => s === 1 ? 2 : 1)}
+        onReturnToBase={onExit}
+        currentWave={wave}
+        totalWaves={map.waves}
+        isEndless={isEndless}
+        mapName={map.name}
+        difficultyName={diffConfig.name}
+      />
     </div>
   );
 };

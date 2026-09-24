@@ -57,7 +57,20 @@ class SoundManager {
       console.error('Failed to save sound settings', e);
     }
     this.updateGains();
+    if (newSettings.musicMuted === false || (newSettings.musicVolume !== undefined && newSettings.musicVolume > 0 && !this.settings.musicMuted)) {
+      this.ensureAudioRunning();
+    }
     return this.getSettings();
+  }
+
+  public ensureAudioRunning() {
+    this.initContext();
+    if (this.ctx && this.ctx.state === 'suspended') {
+      this.ctx.resume().catch(() => {});
+    }
+    if (!this.settings.musicMuted && !this.isMusicPlaying) {
+      this.startAmbientMusic();
+    }
   }
 
   private initContext() {

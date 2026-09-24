@@ -3,7 +3,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { GameCanvas } from './components/game/GameCanvas';
 import { UPGRADE_CONFIG } from './config/constants';
 import { GameMap, PlayerProgress, GlobalUpgrades, Profile, DifficultyLevel } from './types/index';
-import { Zap } from 'lucide-react';
+import { Zap, User } from 'lucide-react';
 import { Shop } from './components/ui/Shop';
 import { MainMenu } from './components/ui/MainMenu';
 import { MapSelection } from './components/ui/MapSelection';
@@ -48,20 +48,58 @@ function App() {
   const [isDevMode, setIsDevMode] = useState(false);
   const [soundSettings, setSoundSettings] = useState<SoundSettings>(() => soundManager.getSettings());
   const [showSaveToast, setShowSaveToast] = useState(false);
+  const [saveToastMessage, setSaveToastMessage] = useState('Game Auto-Saved');
   const [unlockedAchievementToast, setUnlockedAchievementToast] = useState<Achievement | null>(null);
   const saveToastTimeoutRef = useRef<any>(null);
   const achievementToastTimeoutRef = useRef<any>(null);
   const initialLoadDoneRef = useRef(false);
 
-  const triggerSaveNotification = () => {
+  const triggerSaveNotification = useCallback((message: string = 'Game Auto-Saved') => {
+    setSaveToastMessage(message);
     setShowSaveToast(true);
     if (saveToastTimeoutRef.current) {
       clearTimeout(saveToastTimeoutRef.current);
     }
     saveToastTimeoutRef.current = setTimeout(() => {
       setShowSaveToast(false);
-    }, 2200);
-  };
+    }, 3000); // exactly 3 seconds!
+  }, []);
+
+  const handleAutoSaveRound = useCallback((roundNumber: number) => {
+    if (!currentProfileId) return;
+    setProfiles(prev => {
+      const updated = prev.map(p => 
+        p.id === currentProfileId 
+          ? { ...p, progress, lastPlayed: Date.now() } 
+          : p
+      );
+      try {
+        localStorage.setItem('wasteland_defense_profiles', JSON.stringify(updated));
+      } catch (e) {
+        console.error('Failed to auto-save profile', e);
+      }
+      return updated;
+    });
+    triggerSaveNotification(`Round ${roundNumber} Complete • Game Auto-Saved`);
+  }, [currentProfileId, progress, triggerSaveNotification]);
+
+  const handleManualSave = useCallback(() => {
+    if (!currentProfileId) return;
+    setProfiles(prev => {
+      const updated = prev.map(p => 
+        p.id === currentProfileId 
+          ? { ...p, progress, lastPlayed: Date.now() } 
+          : p
+      );
+      try {
+        localStorage.setItem('wasteland_defense_profiles', JSON.stringify(updated));
+      } catch (e) {
+        console.error('Failed to save profile', e);
+      }
+      return updated;
+    });
+    triggerSaveNotification('Game Saved • All Progress Backed Up');
+  }, [currentProfileId, progress, triggerSaveNotification]);
 
   // Check achievements against current stats and progress
   const checkAchievements = useCallback((currentProgress: PlayerProgress) => {
@@ -161,7 +199,7 @@ function App() {
     }
   }, [profiles, loading]);
 
-  // Sync current progress to the active profile object, evaluate achievements & display subtle Game Saved toast
+  // Sync current progress to the active profile object & evaluate achievements
   useEffect(() => {
       if (currentProfileId && !loading) {
           // Check for unlocked achievements
@@ -172,13 +210,6 @@ function App() {
               ? { ...p, progress, lastPlayed: Date.now() } 
               : p
           ));
-
-          // If this is an update during play/upgrades (not the very first profile switch load)
-          if (initialLoadDoneRef.current) {
-              triggerSaveNotification();
-          } else {
-              initialLoadDoneRef.current = true;
-          }
       }
   }, [progress, currentProfileId, loading, checkAchievements]);
 
@@ -191,10 +222,19 @@ function App() {
           lastPlayed: Date.now(),
           progress: INITIAL_PROGRESS
       };
-      setProfiles(prev => [...prev, newProfile]);
+      setProfiles(prev => {
+          const updated = [...prev, newProfile];
+          try {
+              localStorage.setItem('wasteland_defense_profiles', JSON.stringify(updated));
+          } catch (e) {
+              console.error('Failed to save new profile', e);
+          }
+          return updated;
+      });
       setCurrentProfileId(newProfile.id);
       setProgress(newProfile.progress);
       setView('MENU');
+      triggerSaveNotification(`Commander ${name} Initialized`);
   };
 
   const handleSelectProfile = (id: string) => {
@@ -208,11 +248,21 @@ function App() {
   };
 
   const handleDeleteProfile = (id: string) => {
-      setProfiles(prev => prev.filter(p => p.id !== id));
+      setProfiles(prev => {
+          const updated = prev.filter(p => p.id !== id);
+          try {
+              localStorage.setItem('wasteland_defense_profiles', JSON.stringify(updated));
+          } catch (e) {
+              console.error('Failed to delete profile from localStorage', e);
+          }
+          return updated;
+      });
       if (currentProfileId === id) {
           setCurrentProfileId(null);
+          setProgress(INITIAL_PROGRESS);
           setView('PROFILES');
       }
+      triggerSaveNotification('Profile Deleted Successfully');
   };
 
   // --- GAME ACTIONS ---
@@ -249,6 +299,7 @@ function App() {
       checkAchievements(next);
       return next;
     });
+    triggerSaveNotification('Mission Complete • Victory Saved');
     setActiveMap(null);
   };
 
@@ -305,10 +356,13 @@ function App() {
           [key]: prev.upgrades[key] + 1
         }
       }));
+      triggerSaveNotification('Upgrade Installed • Progress Saved');
     }
   };
 
   // --- RENDER ---
+
+  const activeProfile = profiles.find(p => p.id === currentProfileId) || null;
 
   if (activeMap) {
     return (
@@ -322,10 +376,17 @@ function App() {
             onWin={handleWin}
             onAddGlobalPoints={handleGlobalPointsAdd}
             onReportCombatStats={handleReportCombatStats}
+            onAutoSaveRound={handleAutoSaveRound}
+            onManualSave={handleManualSave}
             isDevMode={isDevMode}
             initialIsEndless={gameMode === 'ENDLESS'}
         />
-        <SaveToast show={showSaveToast} />
+        <SaveToast 
+          show={showSaveToast} 
+          message={saveToastMessage}
+          duration={3000}
+          onDismiss={() => setShowSaveToast(false)}
+        />
         <AchievementUnlockedToast achievement={unlockedAchievementToast} />
       </>
     );
@@ -344,12 +405,25 @@ function App() {
         </h1>
         
         {/* Header Sound Controls & Currency Display */}
-        <div className="absolute top-4 right-4 flex items-center gap-3 z-20">
+        <div className="absolute top-4 right-4 flex items-center gap-2.5 z-20">
             <SoundSettingsPanel 
                 settings={soundSettings}
                 onUpdateSettings={handleUpdateSoundSettings}
                 variant="compact"
             />
+            {activeProfile && (
+                <button
+                    onClick={() => {
+                      soundManager.playClick();
+                      setView('PROFILES');
+                    }}
+                    className="hidden sm:flex items-center gap-1.5 bg-neutral-800 hover:bg-neutral-700 px-3 py-1.5 rounded-full border border-neutral-700 text-xs font-bold text-neutral-300 hover:text-white transition"
+                    title="Switch Commander"
+                >
+                    <User className="w-3.5 h-3.5 text-blue-400" />
+                    <span className="truncate max-w-[100px]">{activeProfile.name}</span>
+                </button>
+            )}
             {currentProfileId && (
                 <div className="flex items-center gap-2 bg-neutral-800 px-4 py-2 rounded-full border border-yellow-900/50 shadow-lg">
                     <Zap className="w-4 h-4 text-yellow-500" />
@@ -378,6 +452,13 @@ function App() {
                 onUpdateSoundSettings={handleUpdateSoundSettings}
                 unlockedAchievementsCount={progress.unlockedAchievements?.length || 0}
                 totalAchievementsCount={ACHIEVEMENTS.length}
+                currentProfileName={activeProfile?.name}
+                onSwitchProfile={() => setView('PROFILES')}
+                onDeleteCurrentProfile={() => {
+                  if (currentProfileId) {
+                    handleDeleteProfile(currentProfileId);
+                  }
+                }}
             />
         )}
 
@@ -416,7 +497,12 @@ function App() {
       </div>
 
       {/* Subtle Game Saved Toast */}
-      <SaveToast show={showSaveToast} />
+      <SaveToast 
+        show={showSaveToast} 
+        message={saveToastMessage}
+        duration={3000}
+        onDismiss={() => setShowSaveToast(false)}
+      />
       {/* Achievement Unlocked Toast Notification */}
       <AchievementUnlockedToast achievement={unlockedAchievementToast} />
     </div>
