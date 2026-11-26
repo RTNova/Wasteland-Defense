@@ -171,6 +171,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   // Visual Refs
   const terrainRef = useRef<TerrainProp[]>([]);
   const terrainLayersRef = useRef<TerrainLayers | null>(null);
+  const bgCacheRef = useRef<HTMLCanvasElement | null>(null);
   const fogRef = useRef<FogParticle[]>([]);
   const bgPatternRef = useRef<CanvasPattern | null>(null);
 
@@ -1630,8 +1631,9 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     projectilesRef.current = projectilesRef.current.filter(p => p.lifespan > 0);
   };
 
-  const draw = (ctx: CanvasRenderingContext2D) => {
-    Effects.beginShake(ctx);
+  // Fondo estático (suelo, rejilla, terreno, camino y props). No cambia durante la partida,
+  // así que se dibuja una vez en un canvas aparte y luego se copia con un solo drawImage por frame.
+  const drawStaticBackground = (ctx: CanvasRenderingContext2D) => {
     // 1. Base Background with Texture
     if (bgPatternRef.current) {
        ctx.fillStyle = bgPatternRef.current;
@@ -1767,6 +1769,29 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
              }
         }
     });
+
+  };
+
+  const draw = (ctx: CanvasRenderingContext2D) => {
+    Effects.beginShake(ctx);
+    // Fondo estático: usa la caché si está lista; si no, la construye en cuanto existan patrón y terreno.
+    if (!bgCacheRef.current && bgPatternRef.current && terrainRef.current.length > 0) {
+      const off = document.createElement('canvas');
+      off.width = CANVAS_WIDTH;
+      off.height = CANVAS_HEIGHT;
+      const offCtx = off.getContext('2d');
+      if (offCtx) {
+        drawStaticBackground(offCtx);
+        bgCacheRef.current = off;
+      }
+    }
+    if (bgCacheRef.current) {
+      ctx.drawImage(bgCacheRef.current, 0, 0);
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+    } else {
+      drawStaticBackground(ctx);
+    }
 
     // Ground Effects
     groundEffectsRef.current.forEach(g => drawGroundEffect({ctx, frame: frameRef.current}, g));
@@ -1916,6 +1941,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     Effects.clear();
     Effects.setAtmosphere(CANVAS_WIDTH, CANVAS_HEIGHT, map.id);
     terrainLayersRef.current = buildTerrainLayers(CANVAS_WIDTH, CANVAS_HEIGHT, map.path, map.id);
+    bgCacheRef.current = null; // se reconstruye al siguiente frame
     return () => Effects.clear();
   }, [map]);
 
