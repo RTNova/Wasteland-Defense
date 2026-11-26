@@ -756,6 +756,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     if (isPaused || gameOver || (victory && !isEndless)) return;
 
     frameRef.current++;
+    Effects.trackTowerShots(towersRef.current);
     Effects.update();
     
     fogRef.current.forEach(p => {
@@ -1823,6 +1824,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     // 6.7 Partículas y números de daño
     Effects.drawParticles(ctx);
     Effects.drawDamageNumbers(ctx);
+    Effects.drawAtmosphere(ctx);
 
     // 7. Drifting Fog Layer
     fogRef.current.forEach(f => {
@@ -1893,11 +1895,13 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       }
     }
     Effects.endShake(ctx);
+    Effects.drawVignette(ctx);
   };
 
   // Limpiar efectos al cambiar de mapa o salir
   useEffect(() => {
     Effects.clear();
+    Effects.setAtmosphere(CANVAS_WIDTH, CANVAS_HEIGHT, map.id);
     return () => Effects.clear();
   }, [map]);
 

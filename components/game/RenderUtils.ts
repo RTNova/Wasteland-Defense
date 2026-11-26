@@ -1,5 +1,6 @@
 
 import { Enemy, Tower, Projectile, EnemyType, TowerType, GroundEffect, StatusFeedbackPopup } from '../../types/index';
+import { Effects } from './Effects';
 
 // Helper Types
 interface DrawContext {
@@ -89,6 +90,10 @@ export const drawTower = ({ ctx, frame }: DrawContext, tower: Tower, isGhost: bo
         ctx.setLineDash([]);
     }
 
+    if (!isGhost) {
+        const rc = Effects.getRecoil(tower.id);
+        if (rc > 0) ctx.translate(-Math.cos(rotation) * rc, -Math.sin(rotation) * rc);
+    }
     ctx.rotate(rotation);
     
     // --- SPECIAL BASES ---

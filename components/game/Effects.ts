@@ -29,6 +29,32 @@ const numbers: DamageNumber[] = Array.from({ length: MAX_NUMBERS }, () => ({
 // Daño acumulado por enemigo para no saturar la pantalla con daño por frame (quemadura, veneno, rayos).
 const pendingDamage = new Map<string, { amount: number; cooldown: number; x: number; y: number }>();
 
+// --- Retroceso, luces de disparo y atmósfera ---
+interface ShotLight { x: number; y: number; r: number; color: string; life: number; maxLife: number; active: boolean; }
+const MAX_LIGHTS = 24;
+const lights: ShotLight[] = Array.from({ length: MAX_LIGHTS }, () => ({ x: 0, y: 0, r: 0, color: '#fff', life: 0, maxLife: 1, active: false }));
+let lightCursor = 0;
+
+const recoil = new Map<string, number>();
+const lastCooldown = new Map<string, number>();
+
+interface Mote { x: number; y: number; vx: number; vy: number; size: number; alpha: number; phase: number; }
+let motes: Mote[] = [];
+let atmoW = 0, atmoH = 0, atmoMap = '';
+let vignetteCanvas: HTMLCanvasElement | null = null;
+
+const TOWER_FLASH: Record<string, { color: string; recoil: number; light: number }> = {
+  SURVIVOR: { color: '#fde047', recoil: 2, light: 40 },
+  SNIPER: { color: '#fef9c3', recoil: 4.5, light: 60 },
+  FLAMETHROWER: { color: '#fb923c', recoil: 1, light: 55 },
+  TESLA: { color: '#7dd3fc', recoil: 0, light: 60 },
+  TURRET: { color: '#fde047', recoil: 1.5, light: 35 },
+  LASER: { color: '#f472b6', recoil: 0.5, light: 50 },
+  MONK: { color: '#a7f3d0', recoil: 1, light: 40 },
+  CHEMIST: { color: '#86efac', recoil: 2, light: 45 },
+  MORTAR: { color: '#fdba74', recoil: 5, light: 70 },
+};
+
 let shakeIntensity = 0;
 let particleCursor = 0;
 let numberCursor = 0;
@@ -80,6 +106,96 @@ export const Effects = {
     }
   },
 
+  /** Luz breve (se dibuja aditiva) para disparos. */
+  light(x: number, y: number, r: number, color: string, life = 8) {
+    const l = lights[lightCursor];
+    lightCursor = (lightCursor + 1) % MAX_LIGHTS;
+    l.x = x; l.y = y; l.r = r; l.color = color; l.life = l.maxLife = life; l.active = true;
+  },
+
+  /** Desplazamiento de retroceso actual de una torre (px). */
+  getRecoil(id: string): number {
+    return recoil.get(id) || 0;
+  },
+
+  /**
+   * Detecta disparos: cuando cooldownTimer sube respecto al frame anterior, la torre acaba de disparar.
+   * Llamar una vez por update() con la lista de torres.
+   */
+  trackTowerShots(towers: { id: string; type: string; x: number; y: number; rotation: number; cooldownTimer: number }[]) {
+    const alive = new Set<string>();
+    for (const t of towers) {
+      alive.add(t.id);
+      const prev = lastCooldown.get(t.id);
+      lastCooldown.set(t.id, t.cooldownTimer);
+      if (prev === undefined || t.cooldownTimer <= prev) continue;
+      const cfg = TOWER_FLASH[t.type];
+      if (!cfg) continue;
+      const mx = t.x + Math.cos(t.rotation) * 18;
+      const my = t.y + Math.sin(t.rotation) * 18;
+      Effects.muzzle(mx, my, t.rotation, cfg.color);
+      Effects.light(mx, my, cfg.light, cfg.color);
+      if (cfg.recoil > 0) recoil.set(t.id, cfg.recoil);
+    }
+    // Limpieza de torres vendidas
+    if (lastCooldown.size > towers.length) {
+      lastCooldown.forEach((_, id) => { if (!alive.has(id)) { lastCooldown.delete(id); recoil.delete(id); } });
+    }
+  },
+
+  /** Prepara polvo/ceniza y viñeta para un mapa. */
+  setAtmosphere(w: number, h: number, mapId: string) {
+    atmoW = w; atmoH = h; atmoMap = mapId;
+    const count = 55;
+    motes = Array.from({ length: count }, () => ({
+      x: Math.random() * w, y: Math.random() * h,
+      vx: rand(0.1, 0.5), vy: rand(0.05, 0.35),
+      size: rand(0.8, 2.2), alpha: rand(0.15, 0.45), phase: Math.random() * Math.PI * 2,
+    }));
+    if (typeof document !== 'undefined') {
+      const c = document.createElement('canvas');
+      c.width = w; c.height = h;
+      const g = c.getContext('2d');
+      if (g) {
+        const grad = g.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.45, w / 2, h / 2, Math.max(w, h) * 0.75);
+        grad.addColorStop(0, 'rgba(0,0,0,0)');
+        grad.addColorStop(1, 'rgba(0,0,0,0.55)');
+        g.fillStyle = grad;
+        g.fillRect(0, 0, w, h);
+      }
+      vignetteCanvas = c;
+    }
+  },
+
+  /** Polvo/ceniza flotando y luces de disparo (aditivas). Dibujar sobre entidades. */
+  drawAtmosphere(ctx: CanvasRenderingContext2D) {
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    for (const l of lights) {
+      if (!l.active) continue;
+      const t = l.life / l.maxLife;
+      const g = ctx.createRadialGradient(l.x, l.y, 0, l.x, l.y, l.r);
+      g.addColorStop(0, l.color);
+      g.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.globalAlpha = 0.45 * t;
+      ctx.fillStyle = g;
+      ctx.fillRect(l.x - l.r, l.y - l.r, l.r * 2, l.r * 2);
+    }
+    ctx.restore();
+    ctx.save();
+    ctx.fillStyle = atmoMap === 'wasteland' ? '#bef264' : '#d4d4d4';
+    for (const m of motes) {
+      ctx.globalAlpha = m.alpha;
+      ctx.fillRect(m.x, m.y, m.size, m.size);
+    }
+    ctx.restore();
+  },
+
+  /** Viñeta. Dibujar al final, fuera del temblor, para que no se vean bordes. */
+  drawVignette(ctx: CanvasRenderingContext2D) {
+    if (vignetteCanvas) ctx.drawImage(vignetteCanvas, 0, 0);
+  },
+
   /** Temblor de pantalla. Se acumula pero con tope. */
   shake(amount: number) {
     shakeIntensity = Math.min(14, Math.max(shakeIntensity, amount));
@@ -109,6 +225,14 @@ export const Effects = {
       if (!n.active) continue;
       n.y += n.vy; n.vy *= 0.97;
       if (--n.life <= 0) n.active = false;
+    }
+    for (const l of lights) { if (l.active && --l.life <= 0) l.active = false; }
+    recoil.forEach((v, id) => { const nv = v * 0.8; if (nv < 0.1) recoil.delete(id); else recoil.set(id, nv); });
+    for (const m of motes) {
+      m.x += m.vx + Math.sin(m.phase) * 0.15; m.y += m.vy;
+      m.phase += 0.02;
+      if (m.x > atmoW) m.x = 0;
+      if (m.y > atmoH) { m.y = 0; m.x = Math.random() * atmoW; }
     }
     pendingDamage.forEach((d, id) => {
       if (d.cooldown > 0) { d.cooldown--; if (d.cooldown === 0 && d.amount < 1) pendingDamage.delete(id); }
@@ -181,6 +305,9 @@ export const Effects = {
     for (const p of particles) p.active = false;
     for (const n of numbers) n.active = false;
     pendingDamage.clear();
+    for (const l of lights) l.active = false;
+    recoil.clear();
+    lastCooldown.clear();
     shakeIntensity = 0;
   },
 };
