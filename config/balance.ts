@@ -8,19 +8,37 @@
 
 export const TOWER_MAX_LEVEL = 7;
 export const STARTING_LIVES = 100;
-export const BASE_STARTING_MONEY = 450;
+export const BASE_STARTING_MONEY = 400;
 export const FRAMES_PER_SECOND = 60;
 
 /** Dinero inicial: 450 + 50 por nivel de "Reserves". */
 export const getStartingMoney = (cashLevel: number): number => BASE_STARTING_MONEY + cashLevel * 50;
 
+/**
+ * Base de coste de mejora: 300 + 50% del coste de compra. Antes era el coste de compra, así que mejorar un
+ * Scavenger (100) salía por casi nada y mejorar un Ion Cannon (1300) por una fortuna. Así la torre barata
+ * deja de ser la opción obvia y la cara no se hunde.
+ */
+export const getUpgradeBase = (baseCost: number): number => 300 + baseCost * 0.5;
+
+/** Multiplicador de daño por nivel (sin el +5% general) para las torres normales, por tipo. */
+export const UPGRADE_DAMAGE_MULT: Record<string, number> = {
+  SURVIVOR: 1.2, // Scavenger: nerf (antes 1.3)
+  TURRET: 1.2, // Sentry: nerf (antes 1.3)
+  LASER: 1.4, // Ion Cannon: buff (antes 1.3)
+  TESLA: 1.35,
+  CHEMIST: 1.4,
+};
+
 /** Coste de subir una torre desde `currentLevel` al siguiente: 60% del coste base + 20% por nivel actual. */
-export const getUpgradeCost = (baseCost: number, currentLevel: number): number =>
-  Math.floor(baseCost * 0.6 + baseCost * 0.2 * currentLevel);
+export const getUpgradeCost = (baseCost: number, currentLevel: number): number => {
+  const eff = getUpgradeBase(baseCost);
+  return Math.floor(eff * 0.6 + eff * 0.2 * currentLevel);
+};
 
 /** Multiplicador de vida por oleada (curva de campaña, antes de dificultad y modo Endless). */
 export const getWaveHpMultiplier = (waveNum: number): number =>
-  1 + Math.pow(Math.max(1, waveNum) - 1, 1.6) / 12;
+  1 + Math.pow(Math.max(1, waveNum) - 1, 1.6) / 9;
 
 /** Multiplicador de recompensa por kill según oleada. */
 export const getRewardMultiplier = (waveNum: number, isEndless: boolean): number =>
@@ -69,7 +87,7 @@ export const applyUpgradeStats = (type: string, s: UpgradableStats): UpgradableS
     damage = Math.floor(damage * 1.45);
     cooldown = Math.max(2, cooldown * 0.9);
   } else {
-    damage = Math.floor(damage * 1.3);
+    damage = Math.floor(damage * (UPGRADE_DAMAGE_MULT[type] ?? 1.3));
     range = Math.floor(range * 1.1);
   }
   return { damage, range, cooldown };

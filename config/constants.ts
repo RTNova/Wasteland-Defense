@@ -146,9 +146,9 @@ export const TOWER_DEFINITIONS: Record<TowerType, Partial<Tower>> = {
     name: 'Sentry',
     description: 'Rapid fire machine gun. Lvl 7: Spin-up mechanic for massive fire rate.',
     range: 140,
-    damage: 24,
+    damage: 20,
     cooldown: 8, // Fast
-    cost: 300,
+    cost: 350,
     color: '#ef4444', // Red
     type: TowerType.TURRET
   },
@@ -186,7 +186,7 @@ export const TOWER_DEFINITIONS: Record<TowerType, Partial<Tower>> = {
     name: 'Chemist',
     description: 'Lobs sticky bombs. Lvl 7: Dark Poison applies permanent damage over time.',
     range: 220,
-    damage: 25, // Impact damage
+    damage: 40, // Impact damage
     cooldown: 80,
     cost: 550,
     color: '#84cc16', // Lime Green
@@ -196,7 +196,7 @@ export const TOWER_DEFINITIONS: Record<TowerType, Partial<Tower>> = {
     name: 'Tesla Coil',
     description: 'Zaps multiple targets. Lvl 7: Arcs stun enemies briefly.',
     range: 170,
-    damage: 80,
+    damage: 120,
     cooldown: 100,
     cost: 1400,
     color: '#8b5cf6', // Purple
@@ -206,7 +206,7 @@ export const TOWER_DEFINITIONS: Record<TowerType, Partial<Tower>> = {
     name: 'Ion Cannon',
     description: 'Fires a powerful beam. Lvl 7: Alternates Red (Burn) and Blue (Acid) beams.',
     range: 250,
-    damage: 175, 
+    damage: 300,
     cooldown: 210, 
     cost: 1300,
     color: '#06b6d4', // Cyan
@@ -326,15 +326,15 @@ export const generateWaves = (count: number, difficulty: DifficultyLevel = 'MEDI
         const difficultyProgress = i;
         
         if (i <= 3) {
-            addGroup(EnemyType.WALKER, 6 + i * 2, 15);
+            addGroup(EnemyType.WALKER, 8 + i * 3, 14);
         } else {
-            const runnerCount = Math.floor(difficultyProgress * 1.5);
-            const walkerCount = Math.floor(difficultyProgress * 2);
+            const runnerCount = Math.floor(difficultyProgress * 2);
+            const walkerCount = Math.floor(difficultyProgress * 3);
             
             addGroup(EnemyType.WALKER, walkerCount, 12);
             
             if (i > 3) addGroup(EnemyType.RUNNER, runnerCount, 15);
-            if (i > 6) addGroup(EnemyType.TANK, Math.floor(i / 3), 40);
+            if (i > 5) addGroup(EnemyType.TANK, Math.floor(i / 2.5), 40);
             
             // Introduce new enemies in normal waves
             // Reduced Ninja spawn rate significantly as they are now strong
@@ -346,9 +346,9 @@ export const generateWaves = (count: number, difficulty: DifficultyLevel = 'MEDI
     // Reward scaling
     let reward;
     if (i <= 10) {
-      reward = 150 + (i * 25);
+      reward = 100 + (i * 20);
     } else {
-      reward = 500 + ((i - 10) * 30); // Slightly increased to compensate extreme difficulty
+      reward = 400 + ((i - 10) * 25); // Slightly increased to compensate extreme difficulty
     }
 
     waves.push({

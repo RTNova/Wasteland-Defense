@@ -212,3 +212,29 @@ DPS real contra un objetivo (con la pausa entre ráfagas) y tiempo en limpiar 10
 | 7 | 87 / 1044 / 2.8 s | 33 / 380 / 25 s |
 
 El nivel 1 no cambia contra un objetivo, pero ya no escala con la multitud. Cumple OBJ-1 y OBJ-3 para esta torre (tests nuevos). Todo es ajustable con las constantes.
+
+## Más dificultad y torres más parejas (PR fix/mas-dificultad)
+
+Motivo (nota del usuario): muy fácil al principio; 2 o 3 torres bien puestas y mejoradas aguantan toda la partida, y se acumulan 7000-8000$. Scavenger (100) es demasiado fuerte por sus mejoras baratas; Ion Cannon (1300) no compensa.
+
+Cambios:
+
+| Qué | Antes | Ahora |
+|---|---|---|
+| Coste de mejora | 60% + 20%/nivel del coste de la torre | igual, pero sobre `300 + 50% del coste`. Scavenger 1 a 7: 780 a 2730$. Ion Cannon: 10140 a 7410$ |
+| Daño por mejora Scavenger y Sentry | x1.3 | x1.2 |
+| Daño por mejora Ion Cannon / Tesla / Chemist | x1.3 | x1.4 / x1.35 / x1.4 |
+| Ion Cannon daño base | 175 | 300 |
+| Tesla daño base | 80 | 120 |
+| Chemist daño de impacto | 25 | 40 |
+| Sentry | 300$, 24 daño | 350$, 20 daño |
+| Dinero inicial | 450 | 400 |
+| Vida por oleada | 1 + (n-1)^1.6 / 12 | / 9 |
+| Oleadas 1 a 3 | 6+2n Walkers | 8+3n Walkers |
+| Desde la 4 | 2n Walkers, 1.5n Runners, Tank desde la 7 (n/3) | 3n Walkers, 2n Runners, Tank desde la 6 (n/2.5) |
+| Bonus de oleada | 150+25n (hasta 10), luego 500+30(n-10) | 100+20n, luego 400+25(n-10) |
+
+Efecto (MEDIUM, estático): vida total oleada 1: 816 a 1122; oleada 3: 1533 a 2318; oleada 8: 8768 a 15557; oleada 20: 29767 a 38723. Bonus de oleadas 1-20: 9525 a 7475$.
+DPS por 1000$ invertidos en nivel 7 (Scavenger / Sentry / Ion Cannon): 411 / 395 / 28 a 81 / 129 / 99. OBJ-1 y OBJ-4 pasan ahora.
+
+No medido: partida completa en móvil con varias estrategias. Solo hay una prueba corta de bot (Scavenger solo, 95 s) que ya pierde vidas en la oleada 2-3. Valores a ajustar tras jugarlo.
