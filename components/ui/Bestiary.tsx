@@ -650,7 +650,171 @@ const CombatSimulation: React.FC<{ type: TowerType }> = ({ type }) => {
     return <canvas ref={canvasRef} width={600} height={300} className="w-full aspect-[2/1] bg-black rounded border border-neutral-700 mb-4 shadow-inner" />;
 };
 
+// --- 3. THREAT DEMO (animación en bucle para cada amenaza, estilo carta) ---
+
+const THREAT_CAPTION: Record<string, string> = {
+    WALKER: 'Camina por el camino. Débil, pero llega en masa.',
+    RUNNER: 'Rápido y frágil: te quita 4 vidas si llega.',
+    TANK: 'Aguanta mucho. Al morir suelta 3 Walkers.',
+    BOSS: 'Jefe. Al morir suelta 3 Tanks.',
+    MATRYOSHKA: 'Se abre en cadena: suelta 3 Bosses al morir, y cada Boss suelta 3 Tanks.',
+    HEALER: 'Cura a los enemigos cercanos (3% de su vida máxima cada 0,5 s). Mátalo primero.',
+    ICE_MAGE: 'Dispara a tus torres y las congela: disparan 20% más lento durante 3 s.',
+    NINJA: 'Muy rápido. Al llegar paraliza todas tus torres 3 s y quita 1 vida.',
+};
+
+const THREAT_PATH_Y = 120;
+
+const ThreatDemo: React.FC<{ type: EnemyType }> = ({ type }) => {
+    const canvasRef = useRef<HTMLCanvasElement>(null);
+    const reqRef = useRef<number>(0);
+
+    useEffect(() => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+        const W = canvas.width, H = canvas.height;
+        const stats = ENEMY_STATS[type];
+
+        const mk = (t: EnemyType, x: number, y: number, frac: number, scale = 1): Enemy => {
+            const st = ENEMY_STATS[t];
+            return {
+                id: `${t}-${Math.round(x)}-${Math.round(y)}`, type: t, x, y,
+                health: st.hp * frac, maxHealth: st.hp, speed: 0, pathIndex: 0, distanceTraveled: 0,
+                reward: 0, damageToPlayer: 0, color: st.color, radius: st.radius * scale, isHealer: st.isHealer
+            };
+        };
+        const mkTower = (x: number, y: number, extra: Partial<Tower> = {}): Tower => {
+            const d = TOWER_DEFINITIONS[TowerType.TURRET];
+            return {
+                id: 'demo-tower', type: TowerType.TURRET, x, y, range: 0, damage: 0, cooldown: 0, cooldownTimer: 0, cost: 0,
+                level: 1, color: d.color || '#ef4444', name: '', description: '', rotation: 0, frame: 0, totalDamage: 0, ...extra
+            } as Tower;
+        };
+        const road = () => {
+            ctx.fillStyle = '#1a1a1a'; ctx.fillRect(0, 0, W, H);
+            ctx.strokeStyle = 'rgba(255,255,255,0.05)'; ctx.lineWidth = 1;
+            for (let x = 0; x < W; x += 40) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
+            ctx.lineCap = 'round';
+            ctx.strokeStyle = '#111'; ctx.lineWidth = 46; ctx.beginPath(); ctx.moveTo(0, THREAT_PATH_Y); ctx.lineTo(W, THREAT_PATH_Y); ctx.stroke();
+            ctx.strokeStyle = '#333'; ctx.lineWidth = 38; ctx.beginPath(); ctx.moveTo(0, THREAT_PATH_Y); ctx.lineTo(W, THREAT_PATH_Y); ctx.stroke();
+            ctx.strokeStyle = '#555'; ctx.lineWidth = 2; ctx.setLineDash([15, 15]);
+            ctx.beginPath(); ctx.moveTo(0, THREAT_PATH_Y); ctx.lineTo(W, THREAT_PATH_Y); ctx.stroke(); ctx.setLineDash([]);
+        };
+        const label = (txt: string, x: number, y: number, color = '#fff', size = 13) => {
+            ctx.font = `bold ${size}px monospace`; ctx.textAlign = 'center'; ctx.fillStyle = color; ctx.fillText(txt, x, y);
+        };
+        const ring = (x: number, y: number, r: number, color: string, w = 3) => {
+            ctx.strokeStyle = color; ctx.lineWidth = w; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.stroke();
+        };
+        const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
+
+        const LOOP = 8; // segundos
+        const render = (tt: number) => {
+            const t = tt % LOOP;
+            const frame = Math.floor(tt * 60);
+            const dc = { ctx, frame };
+            road();
+            const y = THREAT_PATH_Y;
+
+            if (stats.onDeathSpawn) {
+                // Tanque, Boss, Matryoshka: caminan, reciben disparos, mueren y sueltan 3 del siguiente tipo
+                const child = stats.onDeathSpawn.type, n = stats.onDeathSpawn.count;
+                const DIE = 3;
+                const px = 40 + (t / DIE) * 150;
+                const sentry = mkTower(190, 48, { rotation: Math.PI / 2 });
+                drawTower(dc, sentry);
+                if (t < DIE) {
+                    drawEnemy(dc, mk(type, px, y, 1 - clamp01(t / DIE) * 1.0 + 0.001));
+                    if (frame % 6 < 3) { ctx.strokeStyle = '#ffff00'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(190, 48); ctx.lineTo(px, y); ctx.stroke(); }
+                } else {
+                    const dx = 190;
+                    const k = t - DIE;
+                    if (k < 0.5) { ring(dx, y, 10 + k * 90, `rgba(251,191,36,${1 - k * 2})`, 4); label('¡MUERE!', dx, y - 40, '#fbbf24'); }
+                    for (let i = 0; i < n; i++) {
+                        const off = (i - (n - 1) / 2) * ENEMY_STATS[child].radius * 2.3;
+                        const pop = clamp01((k - 0.15) / 0.35);
+                        const walk = Math.max(0, k - 0.5) * (ENEMY_STATS[child].speed * 45);
+                        const cx = dx + off * pop + walk;
+                        const cy = y + (1 - pop) * -18;
+                        drawEnemy(dc, mk(child, Math.min(cx, W - 15), cy, 1, 0.4 + 0.6 * pop));
+                    }
+                    if (k > 0.4) label(`+${n} ${child}`, dx, y - 40, '#fca5a5');
+                }
+            } else if (type === EnemyType.HEALER) {
+                // Healer: aura, aliados heridos que se recuperan
+                const hx = 110 + Math.sin(t * 0.6) * 20;
+                const pulse = 0.5 + 0.5 * Math.sin(tt * 4);
+                ring(hx, y, 95, `rgba(74,222,128,${0.25 + pulse * 0.2})`, 2);
+                ring(hx, y, 95 * ((t * 1.5) % 1), 'rgba(74,222,128,0.35)', 2);
+                const cyc = (t % 4) / 4;
+                [0, 1, 2].forEach(i => {
+                    const ax = 200 + i * 38, frac = clamp01(0.3 + 0.7 * ((cyc + i * 0.2) % 1));
+                    const e = mk(EnemyType.WALKER, ax, y, frac);
+                    drawEnemy(dc, e);
+                    if (Math.hypot(ax - hx, 0) < 95 + 20) label('+', ax, y - 22, '#4ade80', 16);
+                });
+                drawEnemy(dc, mk(type, hx, y, 1));
+                label('Cura a los que están dentro del círculo', W / 2, 28, '#86efac', 12);
+            } else if (type === EnemyType.ICE_MAGE) {
+                // Ice Mage dispara a una torre y la congela
+                const mx = 70 + Math.min(t, 6) * 12;
+                const tower = mkTower(250, 52, { rotation: Math.PI / 2 });
+                const cycle = t % 4;
+                const frozen = cycle > 1.2 && cycle < 4;
+                if (frozen) tower.frozenTimer = 60;
+                drawTower(dc, tower);
+                drawEnemy(dc, mk(type, mx, y, 1));
+                if (cycle < 1.2) {
+                    const p = cycle / 1.2;
+                    const bx = mx + (250 - mx) * p, by = y + (52 - y) * p;
+                    ctx.fillStyle = '#93c5fd'; ctx.beginPath(); ctx.arc(bx, by, 5, 0, Math.PI * 2); ctx.fill();
+                    ring(bx, by, 9, 'rgba(147,197,253,0.5)', 2);
+                }
+                if (frozen) label('CONGELADA: -20% velocidad de disparo', 250, 22, '#93c5fd', 12);
+            } else if (type === EnemyType.NINJA) {
+                // Ninja: corre, llega al final, paraliza torres
+                const run = clamp01(t / 2.2);
+                const nx = 20 + run * (W - 45);
+                const stun = t > 2.2 && t < 5.2;
+                [90, 190, 290].forEach((tx, i) => {
+                    const tw = mkTower(tx, 48 + (i % 2) * 8, { rotation: Math.PI / 2 });
+                    if (stun) tw.stunnedTimer = 60;
+                    ctx.save();
+                    if (stun) ctx.globalAlpha = 0.55;
+                    drawTower(dc, tw);
+                    ctx.restore();
+                    if (stun) label('zZ', tx, 24, '#fde047', 14);
+                });
+                if (t < 2.7) drawEnemy(dc, mk(type, nx, y, 1));
+                if (t > 2.2 && t < 2.9) ring(W - 25, y, 10 + (t - 2.2) * 60, `rgba(250,204,21,${1 - (t - 2.2) / 0.7})`, 4);
+                if (stun) label('TORRES PARALIZADAS 3 s  (-1 vida)', W / 2, H - 14, '#fde047', 12);
+            } else {
+                // Walker, Runner: caminan por el camino
+                const sp = stats.speed * 55;
+                for (let i = 0; i < 3; i++) {
+                    const x = ((t * sp + i * 70) % (W + 40)) - 20;
+                    drawEnemy(dc, mk(type, x, y, 1));
+                }
+            }
+        };
+
+        // Paso fijo: el tiempo de la animación se mide en segundos reales, igual en cualquier monitor
+        const t0 = performance.now();
+        const loop = (now: number) => {
+            render((now - t0) / 1000);
+            reqRef.current = requestAnimationFrame(loop);
+        };
+        reqRef.current = requestAnimationFrame(loop);
+        return () => cancelAnimationFrame(reqRef.current);
+    }, [type]);
+
+    return <canvas ref={canvasRef} width={400} height={200} className="w-full aspect-[2/1] bg-black rounded-lg border border-neutral-700 shadow-inner" />;
+};
+
 // --- MAIN COMPONENT ---
+
 
 interface BestiaryProps {
     onBack: () => void;
@@ -830,43 +994,32 @@ export const Bestiary: React.FC<BestiaryProps> = ({ onBack }) => {
                                 </>
                             )}
 
-                            {selectedItem.category === 'ENEMY' && (
-                                <div className="text-center">
-                                    <div className="mb-6 flex justify-center scale-150">
-                                        <EntityCardRenderer type={selectedItem.type} />
+                            {selectedItem.category === 'ENEMY' && (() => {
+                                const t = selectedItem.type as EnemyType;
+                                const st = selectedItem.stats;
+                                const rarity = t === EnemyType.MATRYOSHKA ? { name: 'ÉPICA', c: 'text-purple-300 border-purple-500', bar: 'from-purple-700 to-purple-500' }
+                                             : t === EnemyType.BOSS ? { name: 'JEFE', c: 'text-orange-300 border-orange-500', bar: 'from-orange-700 to-orange-500' }
+                                             : (st.onDeathSpawn || st.isHealer || st.attackRange || t === EnemyType.NINJA) ? { name: 'ESPECIAL', c: 'text-sky-300 border-sky-500', bar: 'from-sky-700 to-sky-500' }
+                                             : { name: 'COMÚN', c: 'text-neutral-300 border-neutral-500', bar: 'from-neutral-700 to-neutral-500' };
+                                return (
+                                    <div className={`rounded-xl border-2 ${rarity.c.split(' ')[1]} overflow-hidden bg-[#0f172a]`}>
+                                        <div className={`flex items-center justify-between px-3 py-2 bg-gradient-to-r ${rarity.bar}`}>
+                                            <span className="font-bold text-white uppercase tracking-wide text-sm">{selectedItem.name}</span>
+                                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded bg-black/40 ${rarity.c.split(' ')[0]}`}>{rarity.name}</span>
+                                        </div>
+                                        <div className="p-2">
+                                            <ThreatDemo type={t} />
+                                        </div>
+                                        <p className="px-3 pb-3 text-xs text-neutral-200 leading-snug">{THREAT_CAPTION[t]}</p>
+                                        <div className="grid grid-cols-4 gap-px bg-[#334155] text-center">
+                                            <div className="bg-[#0f172a] py-2"><div className="text-[9px] text-neutral-500 uppercase">Vida</div><div className="text-green-400 font-bold">{st.hp}</div></div>
+                                            <div className="bg-[#0f172a] py-2"><div className="text-[9px] text-neutral-500 uppercase">Velocidad</div><div className="text-yellow-400 font-bold">{st.speed}</div></div>
+                                            <div className="bg-[#0f172a] py-2"><div className="text-[9px] text-neutral-500 uppercase">Daño</div><div className="text-red-400 font-bold">{st.damageToPlayer}</div></div>
+                                            <div className="bg-[#0f172a] py-2"><div className="text-[9px] text-neutral-500 uppercase">Botín</div><div className="text-blue-400 font-bold">${st.reward}</div></div>
+                                        </div>
                                     </div>
-                                    
-                                    <div className="grid grid-cols-2 gap-4 text-sm mb-6">
-                                        <div className="bg-[#0f172a] p-3 rounded border-l-4 border-green-500">
-                                            <div className="text-neutral-500 text-xs uppercase">Hit Points</div>
-                                            <div className="text-white font-bold text-xl">{selectedItem.stats.hp}</div>
-                                        </div>
-                                        <div className="bg-[#0f172a] p-3 rounded border-l-4 border-yellow-500">
-                                            <div className="text-neutral-500 text-xs uppercase">Speed</div>
-                                            <div className="text-white font-bold text-xl">{selectedItem.stats.speed}</div>
-                                        </div>
-                                        <div className="bg-[#0f172a] p-3 rounded border-l-4 border-red-500">
-                                            <div className="text-neutral-500 text-xs uppercase">Player DMG</div>
-                                            <div className="text-white font-bold text-xl">{selectedItem.stats.damageToPlayer}</div>
-                                        </div>
-                                        <div className="bg-[#0f172a] p-3 rounded border-l-4 border-blue-500">
-                                            <div className="text-neutral-500 text-xs uppercase">Bounty</div>
-                                            <div className="text-white font-bold text-xl">${selectedItem.stats.reward}</div>
-                                        </div>
-                                    </div>
-
-                                    {selectedItem.stats.onDeathSpawn && (
-                                        <div className="bg-red-900/30 p-3 rounded text-sm text-red-200 border border-red-900/50">
-                                            ⚠️ Spawns <strong>{selectedItem.stats.onDeathSpawn.count}x {selectedItem.stats.onDeathSpawn.type}</strong> upon death.
-                                        </div>
-                                    )}
-                                    {selectedItem.stats.isHealer && (
-                                        <div className="bg-green-900/30 p-3 rounded text-sm text-green-200 border border-green-900/50">
-                                            💖 Heals nearby allies continuously. Bursts heal on death.
-                                        </div>
-                                    )}
-                                </div>
-                            )}
+                                );
+                            })()}
 
                         </div>
                     </div>
