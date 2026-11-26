@@ -650,8 +650,33 @@ const drawStatusIndicatorsAboveEnemy = (ctx: CanvasRenderingContext2D, enemy: En
   });
 };
 
+// Barra de vida con "estela": el tramo perdido se desvanece poco a poco. Estado por enemigo, purgado de forma periódica.
+const hpTrail = new Map<string, { value: number; seen: number }>();
+let lastPurgeFrame = 0;
+
 export const drawEnemy = ({ ctx, frame }: DrawContext, enemy: Enemy) => {
     const { x, y, radius, color, health, maxHealth, type, slowFactor, burnTimer } = enemy;
+
+    // 0. Sombra y animación de caminar. La fase depende de la distancia recorrida, así que
+    // al ralentizar o congelar al enemigo la animación se frena sola. Los enemigos grandes se balancean más despacio.
+    ctx.save();
+    ctx.fillStyle = 'rgba(0,0,0,0.25)';
+    ctx.beginPath();
+    ctx.ellipse(x, y + radius * 0.85, radius * 0.9, radius * 0.4, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    ctx.save();
+    {
+        const stride = 0.45 / Math.max(0.6, radius / 10);
+        const phase = enemy.distanceTraveled * stride;
+        const moving = !(enemy.frozen && enemy.frozen > 0);
+        const bob = moving ? Math.abs(Math.sin(phase)) * -radius * 0.18 : 0;
+        const squash = moving ? 1 + Math.sin(phase * 2) * 0.05 : 1;
+        ctx.translate(x, y + bob);
+        ctx.scale(1 / squash, squash);
+        ctx.translate(-x, -y);
+    }
 
     // 1. Aura for Healer
     if (enemy.isHealer) {
@@ -889,23 +914,55 @@ export const drawEnemy = ({ ctx, frame }: DrawContext, enemy: Enemy) => {
         ctx.stroke();
     }
 
+    ctx.restore(); // fin de la animación de caminar: la barra de vida no se balancea
+
     // Health Bar
     const hpPct = Math.max(0, health / maxHealth);
-    const barW = 24;
-    const barH = 4;
-    const barY = y - radius - 10;
-    
-    ctx.fillStyle = '#1f2937';
-    ctx.fillRect(x - barW/2, barY, barW, barH);
-    
-    ctx.fillStyle = (enemy.poisonDoT && enemy.poisonDoT > 0) ? '#10b981' : '#ef4444'; 
+    const barW = Math.max(24, Math.min(44, radius * 1.8));
+    const barH = 5;
+    const barY = y - radius - 11;
+    const bx = x - barW / 2;
+
+    const trail = hpTrail.get(enemy.id) || { value: hpPct, seen: frame };
+    trail.value = hpPct >= trail.value ? hpPct : Math.max(hpPct, trail.value - 0.012);
+    trail.seen = frame;
+    hpTrail.set(enemy.id, trail);
+    if (frame - lastPurgeFrame > 600) {
+        lastPurgeFrame = frame;
+        hpTrail.forEach((v, k) => { if (frame - v.seen > 120) hpTrail.delete(k); });
+    }
+
+    const rr = (px: number, py: number, w: number, h: number) => {
+        ctx.beginPath();
+        ctx.moveTo(px + 2, py);
+        ctx.arcTo(px + w, py, px + w, py + h, 2);
+        ctx.arcTo(px + w, py + h, px, py + h, 2);
+        ctx.arcTo(px, py + h, px, py, 2);
+        ctx.arcTo(px, py, px + w, py, 2);
+        ctx.closePath();
+    };
+
+    ctx.fillStyle = '#111827';
+    rr(bx, barY, barW, barH); ctx.fill();
+
+    // Estela del daño recibido
+    if (trail.value > hpPct) {
+        ctx.fillStyle = 'rgba(255,255,255,0.75)';
+        rr(bx, barY, barW * trail.value, barH); ctx.fill();
+    }
+
+    ctx.fillStyle = (enemy.poisonDoT && enemy.poisonDoT > 0) ? '#10b981' : '#ef4444';
     if (hpPct > 0.5 && !enemy.poisonDoT) ctx.fillStyle = '#22c55e';
     else if (hpPct > 0.2 && !enemy.poisonDoT) ctx.fillStyle = '#eab308';
-    
-    ctx.fillRect(x - barW/2, barY, barW * hpPct, barH);
+    if (hpPct > 0) { rr(bx, barY, Math.max(3, barW * hpPct), barH); ctx.fill(); }
+
+    // Brillo superior
+    ctx.fillStyle = 'rgba(255,255,255,0.28)';
+    ctx.fillRect(bx + 1, barY + 1, Math.max(0, barW * hpPct - 2), 1);
+
     ctx.strokeStyle = (enemy.endlessHpScale && enemy.endlessHpScale > 1.2) ? '#c084fc' : '#000';
     ctx.lineWidth = (enemy.endlessHpScale && enemy.endlessHpScale > 1.2) ? 1.5 : 1;
-    ctx.strokeRect(x - barW/2, barY, barW, barH);
+    rr(bx, barY, barW, barH); ctx.stroke();
 
     // --- RENDER VISUAL STATUS EFFECT INDICATORS (BURNING, FROZEN, SLOWED, POISON, VULNERABLE, ARMOR BROKEN) ABOVE MUTANT ---
     drawStatusIndicatorsAboveEnemy(ctx, enemy, frame, x, barY);
