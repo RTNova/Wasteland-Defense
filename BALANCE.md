@@ -17,7 +17,7 @@ Es un **análisis estático**: calcula con los datos de `config/` y no simula co
 - No hay simulación: la colocación, las rutas, el tiempo de ráfaga del Incinerator y las habilidades de nivel 7 no están modeladas. Para conclusiones firmes hace falta jugar o simular (ver "Siguientes pasos").
 - Las oleadas tienen aleatoriedad (Ninja e Ice Mage). El informe da cota inferior (no aparecen) y superior (aparecen siempre).
 
-## Seguimiento de hipótesis (de tus notas)
+## Seguimiento de hipótesis (de mis notas)
 
 Estado: `Apoyada` = los números respaldan la nota. `No apoyada` = los números dicen lo contrario. `Sin datos` = el análisis estático no puede decidirlo. `Pendiente` = nadie lo ha cambiado todavía.
 
@@ -43,9 +43,9 @@ Estado: `Apoyada` = los números respaldan la nota. `No apoyada` = los números 
 5. En Reactor Core un Walker tarda 78 s en recorrer el camino, más del doble que en los demás mapas (21 a 38 s). Las torres tienen más tiempo para disparar, así que su dificultad EXTREME no sale de la vida de los enemigos. No lo he simulado.
 6. El README anunciaba 9 torres y 6 enemigos. El código tiene 11 torres y 8 tipos de enemigo (ver README actualizado).
 
-## Estado de las ideas de tus notas (comprobado en el código)
+## Estado de las ideas de mis notas (comprobado en el código)
 
-Las líneas que tenías entre paréntesis las he contrastado con el código el 26/11/2026.
+Las líneas que tenía entre paréntesis las he contrastado con el código el 26/11/2026.
 
 | Idea | Estado en el código |
 |---|---|
@@ -56,7 +56,7 @@ Las líneas que tenías entre paréntesis las he contrastado con el código el 2
 | Mejoras para las torres, con mejora final | Hecho: 7 niveles, habilidad exclusiva en el nivel 7. |
 | Cada 10 oleadas un jefe | Hecho y más: Boss en la 10 y la 15, Matrioska en la 20, jefes cada 5 oleadas. |
 | Tanque que suelta tres rojos como matrioska | Cubierto por la cadena: Matrioska, que suelta 3 Boss (rojos), que sueltan 3 Tank. El Tank suelta 3 Walkers (verdes), no rojos. |
-| Líder de batalla con curación de 350 | Radio se mantiene en 200 (decisión posterior del usuario, en vez de 350). Al morir deja una zona de curación de 3,5 s: una aguja gira una vuelta desde arriba y va rellenando el área; cura 3 % de vida máxima cada 0,5 s y luego desaparece. |
+| Líder de batalla con curación de 350 | Radio se mantiene en 200 (decisión posterior, en vez de 350). Al morir deja una zona de curación de 3,5 s: una aguja gira una vuelta desde arriba y va rellenando el área; cura 3 % de vida máxima cada 0,5 s y luego desaparece. |
 | Mago de hielo que dispara y ralentiza torres | Hecho: ICE_MAGE ataca a torres cercanas y las congela (ataque más lento, 3 s). |
 | Ninja rápido que paraliza torres 3 s y quita 1 vida | Corregido: es el más rápido (2.0), paraliza 3 s (180 frames) y quita 1 vida. |
 | Centinela con escudo anti-aturdimiento | No hecho. |
@@ -215,7 +215,7 @@ El nivel 1 no cambia contra un objetivo, pero ya no escala con la multitud. Cump
 
 ## Más dificultad y torres más parejas (PR fix/mas-dificultad)
 
-Motivo (nota del usuario): muy fácil al principio; 2 o 3 torres bien puestas y mejoradas aguantan toda la partida, y se acumulan 7000-8000$. Scavenger (100) es demasiado fuerte por sus mejoras baratas; Ion Cannon (1300) no compensa.
+Motivo: demasiado fácil al principio; 2 o 3 torres bien puestas y mejoradas aguantan toda la partida, y se acumulan 7000-8000$. Scavenger (100) es demasiado fuerte por sus mejoras baratas; Ion Cannon (1300) no compensa.
 
 Cambios:
 
