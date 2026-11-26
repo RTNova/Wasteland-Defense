@@ -2677,8 +2677,10 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
                 })}
             </div>
 
+        </div>
+
             {selectedTowerId && (
-                <div className="absolute bottom-0 left-0 right-0 lg:static mt-auto p-4 bg-neutral-900 border-t border-neutral-700 animate-in slide-in-from-bottom z-20">
+                <div className="shrink-0 max-h-[60%] overflow-y-auto p-3 lg:p-4 bg-neutral-900 border-t border-neutral-700 animate-in slide-in-from-bottom z-20">
                     {(() => {
                         const t = towersRef.current.find(t => t.id === selectedTowerId);
                         if(!t) return null;
@@ -2777,7 +2779,6 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
                     })()}
                 </div>
             )}
-        </div>
       </div>
 
       {/* TACTICAL GAME MENU MODAL */}
