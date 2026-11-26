@@ -253,6 +253,13 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   }, [isEndless]);
 
   const [isPaused, setIsPaused] = useState(false);
+  const [dropWarning, setDropWarning] = useState<string | null>(null);
+  const dropWarningTimer = useRef<number | undefined>(undefined);
+  const showDropWarning = (msg: string) => {
+    setDropWarning(msg);
+    window.clearTimeout(dropWarningTimer.current);
+    dropWarningTimer.current = window.setTimeout(() => setDropWarning(null), 1800);
+  };
   const [hoveredTowerType, setHoveredTowerType] = useState<TowerType | null>(null);
   const [notification, setNotification] = useState<{text: string, opacity: number} | null>(null);
   const notificationTimeoutRef = useRef<any>(null);
@@ -2038,7 +2045,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     return () => {
       if (requestRef.current) cancelAnimationFrame(requestRef.current);
     };
-  }, [gameOver, victory, map, dragState, selectedTowerId, upgrades, gameSpeed, isEndless]); 
+  }, [gameOver, victory, map, dragState, selectedTowerId, upgrades, gameSpeed, isEndless, isPaused]); 
 
   // --- KEYBOARD SHORTCUTS: ESC / M for Menu ---
   useEffect(() => {
@@ -2150,6 +2157,17 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     const handleGlobalPointerUp = () => {
       if (!dragState.isDragging) return;
 
+      if (!dragState.validPlacement && dragState.gameX >= 0) {
+        // Soltó la torre sobre el mapa en un sitio no válido: avisar del motivo
+        let reason = 'No se puede construir aquí';
+        const gx = dragState.gameX, gy = dragState.gameY;
+        if (towersRef.current.length >= currentTowerLimit) reason = 'Límite de torres alcanzado';
+        else if (gx < 20 || gx > CANVAS_WIDTH - 20 || gy < 20 || gy > CANVAS_HEIGHT - 20) reason = 'Demasiado cerca del borde';
+        else if (towersRef.current.some(t => getDistance(t, { x: gx, y: gy }) < 40)) reason = 'Demasiado cerca de otra torre';
+        else if (getDistanceToPath({ x: gx, y: gy }, map.path) < 35) reason = 'No se puede construir sobre el camino';
+        showDropWarning(reason);
+      }
+
       if (dragState.validPlacement && dragState.towerType) {
         // Limit Check already done in validity but good to be safe
         if (towersRef.current.length < currentTowerLimit) {
@@ -2259,6 +2277,12 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
                 className="absolute top-20 left-1/2 -translate-x-1/2 bg-indigo-900/90 text-white px-6 py-2.5 rounded-full border border-indigo-500 shadow-[0_0_30px_rgba(99,102,241,0.5)] font-bold text-sm sm:text-base animate-in fade-in slide-in-from-top-2 pointer-events-none z-50 transition-opacity duration-300 backdrop-blur-md"
             >
                 {notification.text}
+            </div>
+        )}
+
+        {dropWarning && (
+            <div className="absolute top-12 left-1/2 -translate-x-1/2 z-50 pointer-events-none bg-red-900/90 border border-red-500/60 text-red-100 text-xs lg:text-sm font-bold px-3 py-1.5 rounded shadow-lg">
+                {dropWarning}
             </div>
         )}
 
@@ -2618,7 +2642,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
              </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-2 lg:p-4">
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-2 lg:p-4">
             <h3 className="text-xs font-bold text-neutral-500 mb-2 uppercase tracking-widest">Defenses (Drag to Map)</h3>
             <div className="gc-towers grid grid-cols-6 lg:grid-cols-2 gap-1.5 lg:gap-3">
                 {Object.values(TOWER_DEFINITIONS).map((def) => {
@@ -2630,6 +2654,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
                             onPointerDown={(e) => {
                                 if(canAfford) handlePointerDown(e, def.type as TowerType);
                             }}
+                            onDragStart={(e) => e.preventDefault()}
                             onMouseEnter={() => setHoveredTowerType(def.type as TowerType)}
                             onMouseLeave={() => setHoveredTowerType(null)}
                             className={`relative p-1 lg:p-2 rounded border-2 flex flex-col items-center gap-0.5 lg:gap-1 transition select-none touch-none ${
