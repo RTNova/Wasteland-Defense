@@ -398,14 +398,14 @@ function App() {
     <div className="min-h-screen bg-neutral-950 text-white font-mono selection:bg-red-900 selection:text-white overflow-x-hidden flex flex-col">
       
       {/* Header */}
-      <header className="bg-neutral-900 border-b border-neutral-800 p-6 text-center relative overflow-hidden shrink-0">
+      <header className="bg-neutral-900 border-b border-neutral-800 p-3 lg:p-6 text-center relative overflow-hidden shrink-0 flex flex-wrap items-center justify-center gap-x-4 gap-y-2">
         <div className="absolute inset-0 opacity-10 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-red-900 via-black to-black"></div>
-        <h1 className="relative z-10 text-3xl md:text-5xl font-title tracking-tighter text-neutral-200 pointer-events-none select-none">
+        <h1 className="relative z-10 text-2xl sm:text-3xl lg:text-5xl font-title tracking-tighter text-neutral-200 pointer-events-none select-none">
           WASTELAND <span className="text-red-600">DEFENSE</span>
         </h1>
         
         {/* Header Sound Controls & Currency Display */}
-        <div className="absolute top-4 right-4 flex items-center gap-2.5 z-20">
+        <div className="relative z-20 lg:absolute lg:top-4 lg:right-4 flex items-center gap-2.5">
             <SoundSettingsPanel 
                 settings={soundSettings}
                 onUpdateSettings={handleUpdateSoundSettings}
@@ -425,9 +425,9 @@ function App() {
                 </button>
             )}
             {currentProfileId && (
-                <div className="flex items-center gap-2 bg-neutral-800 px-4 py-2 rounded-full border border-yellow-900/50 shadow-lg">
+                <div className="flex items-center gap-2 bg-neutral-800 px-3 lg:px-4 py-1.5 lg:py-2 rounded-full border border-yellow-900/50 shadow-lg">
                     <Zap className="w-4 h-4 text-yellow-500" />
-                    <span className="text-yellow-500 font-bold text-lg">{progress.techPoints}</span>
+                    <span className="text-yellow-500 font-bold text-base lg:text-lg">{progress.techPoints}</span>
                 </div>
             )}
         </div>

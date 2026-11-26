@@ -18,6 +18,14 @@
         font-family: 'Black Ops One', system-ui;
       }
       
+      /* Móvil en horizontal (por debajo de lg): barra lateral a la derecha en vez de abajo */
+      @media (orientation: landscape) and (max-width: 1023px) {
+        .gc-root { flex-direction: row !important; }
+        .gc-side { width: 300px !important; height: 100% !important; border-top-width: 0 !important; border-left-width: 1px !important; }
+        .gc-towers { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; }
+        .gc-ctrl { padding: 6px !important; gap: 6px !important; }
+        .gc-hud { max-width: calc(100% - 5rem) !important; }
+      }
       .no-scrollbar::-webkit-scrollbar {
           display: none;
       }
