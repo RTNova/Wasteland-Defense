@@ -1188,6 +1188,11 @@ export const drawGroundEffect = ({ ctx, frame }: DrawContext, g: GroundEffect) =
     ctx.globalAlpha = 1;
 };
 
+// Ancho del texto de cada aviso: se mide una vez (measureText cada frame y por aviso es caro)
+const popupWidthCache = new Map<string, number>();
+// Con muchos avisos a la vez, el brillo (shadowBlur) es lo más caro: se desactiva por encima de este número
+const POPUP_GLOW_MAX = 12;
+
 export const drawStatusPopups = (
   { ctx }: { ctx: CanvasRenderingContext2D },
   popups: StatusFeedbackPopup[]
@@ -1215,13 +1220,19 @@ export const drawStatusPopups = (
     ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
 
     // Dark backdrop capsule for maximum contrast
-    ctx.shadowColor = popup.glowColor;
-    ctx.shadowBlur = 8;
+    if (popups.length <= POPUP_GLOW_MAX) {
+      ctx.shadowColor = popup.glowColor;
+      ctx.shadowBlur = 8;
+    }
     ctx.fillStyle = 'rgba(10, 15, 29, 0.9)';
     ctx.strokeStyle = popup.color;
     ctx.lineWidth = 1.2;
 
-    const textWidth = ctx.measureText(popup.text).width;
+    let textWidth = popupWidthCache.get(popup.text);
+    if (textWidth === undefined) {
+      textWidth = ctx.measureText(popup.text).width;
+      popupWidthCache.set(popup.text, textWidth);
+    }
     const w = textWidth + 12;
     const h = 18;
 
