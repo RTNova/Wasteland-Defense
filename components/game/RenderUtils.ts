@@ -1,6 +1,7 @@
 
 import { Enemy, Tower, Projectile, EnemyType, TowerType, GroundEffect, StatusFeedbackPopup } from '../../types/index';
 import { Effects } from './Effects';
+import { HEALER_HEAL_RADIUS, HEALER_ZONE_FRAMES } from '../../config/constants';
 
 // Helper Types
 interface DrawContext {
@@ -681,7 +682,7 @@ export const drawEnemy = ({ ctx, frame }: DrawContext, enemy: Enemy) => {
     // 1. Aura for Healer
     if (enemy.isHealer) {
         ctx.beginPath();
-        ctx.arc(x, y, 200, 0, Math.PI*2);
+        ctx.arc(x, y, HEALER_HEAL_RADIUS, 0, Math.PI*2);
         ctx.strokeStyle = `rgba(74, 222, 128, ${0.1 + Math.sin(frame * 0.05) * 0.05})`;
         ctx.lineWidth = 1;
         ctx.stroke();
@@ -1111,6 +1112,52 @@ export const drawProjectile = ({ ctx, frame }: DrawContext, p: Projectile, enemi
 };
 
 export const drawGroundEffect = ({ ctx, frame }: DrawContext, g: GroundEffect) => {
+    if (g.type === 'HEAL_ZONE') {
+        const total = g.maxLifespan || HEALER_ZONE_FRAMES;
+        const progress = Math.min(1, Math.max(0, 1 - g.lifespan / total)); // 0 -> 1
+        const angle = -Math.PI / 2 + progress * Math.PI * 2; // una sola vuelta
+        const fade = Math.min(1, g.lifespan / 20); // se desvanece al final
+        ctx.save();
+        ctx.globalAlpha = fade;
+        // Disco y borde
+        ctx.beginPath();
+        ctx.arc(g.x, g.y, g.radius, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(74, 222, 128, 0.07)';
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(134, 239, 172, 0.6)';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        // Anillos de radar
+        ctx.strokeStyle = 'rgba(134, 239, 172, 0.2)';
+        ctx.lineWidth = 1;
+        for (const k of [0.33, 0.66]) {
+            ctx.beginPath();
+            ctx.arc(g.x, g.y, g.radius * k, 0, Math.PI * 2);
+            ctx.stroke();
+        }
+        // Estela del barrido (cuña que se desvanece detrás de la aguja)
+        const steps = 14;
+        const span = 1.1; // radianes de estela
+        for (let i = 0; i < steps; i++) {
+            const a1 = angle - span * (i / steps);
+            const a0 = angle - span * ((i + 1) / steps);
+            ctx.beginPath();
+            ctx.moveTo(g.x, g.y);
+            ctx.arc(g.x, g.y, g.radius, a0, a1);
+            ctx.closePath();
+            ctx.fillStyle = `rgba(74, 222, 128, ${0.22 * (1 - i / steps)})`;
+            ctx.fill();
+        }
+        // Aguja
+        ctx.beginPath();
+        ctx.moveTo(g.x, g.y);
+        ctx.lineTo(g.x + Math.cos(angle) * g.radius, g.y + Math.sin(angle) * g.radius);
+        ctx.strokeStyle = 'rgba(220, 252, 231, 0.95)';
+        ctx.lineWidth = 3;
+        ctx.stroke();
+        ctx.restore();
+        return;
+    }
     if (g.type === 'DELAYED_HEAL') {
         const pct = g.lifespan / (g.maxLifespan || 120);
         ctx.beginPath();

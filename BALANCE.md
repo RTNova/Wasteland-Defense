@@ -56,9 +56,9 @@ Las líneas que tenías entre paréntesis las he contrastado con el código el 2
 | Mejoras para las torres, con mejora final | Hecho: 7 niveles, habilidad exclusiva en el nivel 7. |
 | Cada 10 oleadas un jefe | Hecho y más: Boss en la 10 y la 15, Matrioska en la 20, jefes cada 5 oleadas. |
 | Tanque que suelta tres rojos como matrioska | Cubierto por la cadena: Matrioska, que suelta 3 Boss (rojos), que sueltan 3 Tank. El Tank suelta 3 Walkers (verdes), no rojos. |
-| Líder de batalla con curación de 350 | Parcial: existe el Healer, pero su radio es 200, no 350. |
+| Líder de batalla con curación de 350 | Corregido: radio 350. Al morir deja una zona de curación de 3,5 s con barrido tipo radar (3 % de vida máxima cada 0,5 s) que luego desaparece. |
 | Mago de hielo que dispara y ralentiza torres | Hecho: ICE_MAGE ataca a torres cercanas y las congela (ataque más lento, 3 s). |
-| Ninja rápido que paraliza torres 3 s y quita 1 vida | Parcial: es el más rápido (2.0), pero paraliza 2 s (120 frames) y quita 2 vidas. |
+| Ninja rápido que paraliza torres 3 s y quita 1 vida | Corregido: es el más rápido (2.0), paraliza 3 s (180 frames) y quita 1 vida. |
 | Centinela con escudo anti-aturdimiento | No hecho. |
 | Mezclar habilidades de dos torres | No hecho. |
 | Torre que roba stats, torre Brujo | No hecho. |

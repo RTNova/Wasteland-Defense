@@ -1,7 +1,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { Enemy, Tower, Projectile, GameMap, EnemyType, TowerType, Point, GlobalUpgrades, DragState, GroundEffect, CurrencyPopup, StatusFeedbackPopup, DifficultyLevel } from '../../types/index';
-import { CANVAS_HEIGHT, CANVAS_WIDTH, ENEMY_STATS, TOWER_DEFINITIONS, generateWaves } from '../../config/constants';
+import { CANVAS_HEIGHT, CANVAS_WIDTH, ENEMY_STATS, TOWER_DEFINITIONS, generateWaves, NINJA_STUN_FRAMES, HEALER_HEAL_RADIUS, HEALER_ZONE_FRAMES, HEALER_ZONE_TICK_FRAMES, HEALER_ZONE_TICK_PCT } from '../../config/constants';
 import { Heart, Zap, Crosshair, Play, Pause, LogOut, FastForward, Repeat, ArrowUp, Terminal, Skull, Minimize2, Maximize2, Sword, Infinity as InfinityIcon, BarChart3, CheckCircle2, ShieldAlert, Sliders, X } from 'lucide-react';
 import { Effects } from './Effects';
 import { buildTerrainLayers, TerrainLayers } from './Terrain';
@@ -721,14 +721,11 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
           spawnMinions(enemy, enemy.onDeathSpawn.type, enemy.onDeathSpawn.count);
       }
       if (enemy.isHealer) {
-           // Burst Heal on death
-           enemiesRef.current.forEach(ally => {
-               if (ally.id !== enemy.id && ally.health > 0 && getDistance(enemy, ally) < 200) {
-                   ally.health = Math.min(ally.maxHealth, ally.health + (ally.maxHealth * 0.15));
-               }
-           });
+           // Zona de curación al morir: dura HEALER_ZONE_FRAMES, con barrido tipo radar
            groundEffectsRef.current.push({
-               id: Math.random().toString(), x: enemy.x, y: enemy.y, radius: 200, lifespan: 15, type: 'DELAYED_HEAL', damagePerFrame: 0, healAmount: 0, slowFactor: 1
+               id: Math.random().toString(), x: enemy.x, y: enemy.y, radius: HEALER_HEAL_RADIUS,
+               lifespan: HEALER_ZONE_FRAMES, maxLifespan: HEALER_ZONE_FRAMES, type: 'HEAL_ZONE',
+               damagePerFrame: 0, healAmount: 0, slowFactor: 1
            });
       }
       // Check for hunter ammo
@@ -771,6 +768,15 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
 
     groundEffectsRef.current.forEach(g => {
         g.lifespan--;
+        if (g.type === 'HEAL_ZONE' && g.lifespan > 0 && (g.maxLifespan! - g.lifespan) % HEALER_ZONE_TICK_FRAMES === 0) {
+             enemiesRef.current.forEach(ally => {
+                 if (ally.health > 0 && ally.health < ally.maxHealth && getDistance(ally, {x: g.x, y: g.y}) <= g.radius) {
+                     let heal = ally.maxHealth * HEALER_ZONE_TICK_PCT;
+                     if (ally.healingReduction) heal *= (1 - ally.healingReduction);
+                     ally.health = Math.min(ally.maxHealth, ally.health + heal);
+                 }
+             });
+        }
         if (g.type === 'DELAYED_HEAL' && g.lifespan <= 0) {
              enemiesRef.current.forEach(ally => {
                  if (ally.health > 0 && getDistance(ally, {x: g.x, y: g.y}) < g.radius) {
@@ -1049,7 +1055,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
               enemiesRef.current.forEach(ally => {
                   if (ally.id !== enemy.id && ally.health > 0 && ally.health < ally.maxHealth) {
                       const dist = getDistance(enemy, ally);
-                      if (dist <= 200) {
+                      if (dist <= HEALER_HEAL_RADIUS) {
                           let healAmount = ally.maxHealth * 0.05;
                           if (ally.healingReduction) healAmount *= (1 - ally.healingReduction);
                           ally.health = Math.min(ally.maxHealth, ally.health + healAmount);
@@ -1086,7 +1092,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
            
            // NINJA EFFECT: Paralyze towers if reaches end
            if (enemy.type === EnemyType.NINJA) {
-               towersRef.current.forEach(t => t.stunnedTimer = 120); // 2 seconds global stun
+               towersRef.current.forEach(t => t.stunnedTimer = NINJA_STUN_FRAMES); // 3 seconds global stun
                showGameNotification("SYSTEM CRITICAL: TOWERS PARALYZED", 3000);
            }
 
