@@ -1115,37 +1115,22 @@ export const drawGroundEffect = ({ ctx, frame }: DrawContext, g: GroundEffect) =
     if (g.type === 'HEAL_ZONE') {
         const total = g.maxLifespan || HEALER_ZONE_FRAMES;
         const progress = Math.min(1, Math.max(0, 1 - g.lifespan / total)); // 0 -> 1
-        const angle = -Math.PI / 2 + progress * Math.PI * 2; // una sola vuelta
-        const fade = Math.min(1, g.lifespan / 20); // se desvanece al final
+        const start = -Math.PI / 2; // la aguja empieza apuntando hacia arriba
+        const angle = start + progress * Math.PI * 2; // una sola vuelta
         ctx.save();
-        ctx.globalAlpha = fade;
-        // Disco y borde
+        // Borde del área
         ctx.beginPath();
         ctx.arc(g.x, g.y, g.radius, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(74, 222, 128, 0.07)';
-        ctx.fill();
-        ctx.strokeStyle = 'rgba(134, 239, 172, 0.6)';
+        ctx.strokeStyle = 'rgba(134, 239, 172, 0.45)';
         ctx.lineWidth = 2;
         ctx.stroke();
-        // Anillos de radar
-        ctx.strokeStyle = 'rgba(134, 239, 172, 0.2)';
-        ctx.lineWidth = 1;
-        for (const k of [0.33, 0.66]) {
-            ctx.beginPath();
-            ctx.arc(g.x, g.y, g.radius * k, 0, Math.PI * 2);
-            ctx.stroke();
-        }
-        // Estela del barrido (cuña que se desvanece detrás de la aguja)
-        const steps = 14;
-        const span = 1.1; // radianes de estela
-        for (let i = 0; i < steps; i++) {
-            const a1 = angle - span * (i / steps);
-            const a0 = angle - span * ((i + 1) / steps);
+        // Zona ya barrida: relleno suave que se queda hasta completar el círculo
+        if (progress > 0) {
             ctx.beginPath();
             ctx.moveTo(g.x, g.y);
-            ctx.arc(g.x, g.y, g.radius, a0, a1);
+            ctx.arc(g.x, g.y, g.radius, start, angle);
             ctx.closePath();
-            ctx.fillStyle = `rgba(74, 222, 128, ${0.22 * (1 - i / steps)})`;
+            ctx.fillStyle = 'rgba(74, 222, 128, 0.2)';
             ctx.fill();
         }
         // Aguja

@@ -363,8 +363,8 @@ export const generateWaves = (count: number, difficulty: DifficultyLevel = 'MEDI
 // Ninja: al llegar al final paraliza todas las torres 3 s (60 frames/s) y quita 1 vida.
 export const NINJA_STUN_FRAMES = 180;
 
-// Healer: radio de curación (350) y zona de curación al morir (3,5 s, 60 frames/s).
-export const HEALER_HEAL_RADIUS = 350;
+// Healer: radio de curación (200, el original) y zona de curación al morir (3,5 s, 60 frames/s).
+export const HEALER_HEAL_RADIUS = 200;
 export const HEALER_ZONE_FRAMES = 210;
 export const HEALER_ZONE_TICK_FRAMES = 30;
 export const HEALER_ZONE_TICK_PCT = 0.03;
