@@ -1,6 +1,7 @@
 
 import { Enemy, Tower, Projectile, EnemyType, TowerType, GroundEffect, StatusFeedbackPopup } from '../../types/index';
 import { Effects } from './Effects';
+import { HEALER_HEAL_RADIUS, HEALER_ZONE_FRAMES } from '../../config/constants';
 
 // Helper Types
 interface DrawContext {
@@ -681,7 +682,7 @@ export const drawEnemy = ({ ctx, frame }: DrawContext, enemy: Enemy) => {
     // 1. Aura for Healer
     if (enemy.isHealer) {
         ctx.beginPath();
-        ctx.arc(x, y, 200, 0, Math.PI*2);
+        ctx.arc(x, y, HEALER_HEAL_RADIUS, 0, Math.PI*2);
         ctx.strokeStyle = `rgba(74, 222, 128, ${0.1 + Math.sin(frame * 0.05) * 0.05})`;
         ctx.lineWidth = 1;
         ctx.stroke();
@@ -1111,6 +1112,37 @@ export const drawProjectile = ({ ctx, frame }: DrawContext, p: Projectile, enemi
 };
 
 export const drawGroundEffect = ({ ctx, frame }: DrawContext, g: GroundEffect) => {
+    if (g.type === 'HEAL_ZONE') {
+        const total = g.maxLifespan || HEALER_ZONE_FRAMES;
+        const progress = Math.min(1, Math.max(0, 1 - g.lifespan / total)); // 0 -> 1
+        const start = -Math.PI / 2; // la aguja empieza apuntando hacia arriba
+        const angle = start + progress * Math.PI * 2; // una sola vuelta
+        ctx.save();
+        // Borde del área
+        ctx.beginPath();
+        ctx.arc(g.x, g.y, g.radius, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(134, 239, 172, 0.45)';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        // Zona ya barrida: relleno suave que se queda hasta completar el círculo
+        if (progress > 0) {
+            ctx.beginPath();
+            ctx.moveTo(g.x, g.y);
+            ctx.arc(g.x, g.y, g.radius, start, angle);
+            ctx.closePath();
+            ctx.fillStyle = 'rgba(74, 222, 128, 0.2)';
+            ctx.fill();
+        }
+        // Aguja
+        ctx.beginPath();
+        ctx.moveTo(g.x, g.y);
+        ctx.lineTo(g.x + Math.cos(angle) * g.radius, g.y + Math.sin(angle) * g.radius);
+        ctx.strokeStyle = 'rgba(220, 252, 231, 0.95)';
+        ctx.lineWidth = 3;
+        ctx.stroke();
+        ctx.restore();
+        return;
+    }
     if (g.type === 'DELAYED_HEAL') {
         const pct = g.lifespan / (g.maxLifespan || 120);
         ctx.beginPath();

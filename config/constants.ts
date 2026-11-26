@@ -243,7 +243,7 @@ export const ENEMY_STATS: Record<EnemyType, { hp: number; speed: number; reward:
   [EnemyType.RUNNER]: { hp: 65, speed: 1.1, reward: 8, color: '#facc15', radius: 8, damageToPlayer: 4 }, 
   
   // Ninja: REBALANCED TO MINI-BOSS
-  [EnemyType.NINJA]: { hp: 450, speed: 2.0, reward: 40, color: '#171717', radius: 9, damageToPlayer: 2 },
+  [EnemyType.NINJA]: { hp: 450, speed: 2.0, reward: 40, color: '#171717', radius: 9, damageToPlayer: 1 },
 
   // Ice Mage: Moderate speed, attacks towers
   [EnemyType.ICE_MAGE]: { hp: 250, speed: 0.7, reward: 30, color: '#3b82f6', radius: 12, damageToPlayer: 5, attackRange: 150, attackCooldown: 180 },
@@ -359,3 +359,12 @@ export const generateWaves = (count: number, difficulty: DifficultyLevel = 'MEDI
   }
   return waves;
 };
+
+// Ninja: al llegar al final paraliza todas las torres 3 s (60 frames/s) y quita 1 vida.
+export const NINJA_STUN_FRAMES = 180;
+
+// Healer: radio de curación (200, el original) y zona de curación al morir (3,5 s, 60 frames/s).
+export const HEALER_HEAL_RADIUS = 200;
+export const HEALER_ZONE_FRAMES = 210;
+export const HEALER_ZONE_TICK_FRAMES = 30;
+export const HEALER_ZONE_TICK_PCT = 0.03;

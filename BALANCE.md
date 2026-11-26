@@ -23,7 +23,7 @@ Estado: `Apoyada` = los números respaldan la nota. `No apoyada` = los números 
 
 | Nota | Evidencia estática | Veredicto | Decisión |
 |---|---|---|---|
-| Nerf Lanzallamas (Incinerator) | DPS nominal L7 = 2610, el doble que cualquier otra torre. Cada mejora multiplica el daño por 1.52 y baja el cooldown un 10% (con mínimo 2), así que el DPS sube ~1.69x por nivel hasta tocar ese mínimo. 4.3x la mediana de DPS/$ en L7. Falta saber su tiempo de ráfaga real. | Apoyada | Pendiente |
+| Nerf Lanzallamas (Incinerator) | **Aplicado en el PR de nerf** (ver sección "Nerf del Incinerator"). Análisis original: | DPS nominal L7 = 2610, el doble que cualquier otra torre. Cada mejora multiplica el daño por 1.52 y baja el cooldown un 10% (con mínimo 2), así que el DPS sube ~1.69x por nivel hasta tocar ese mínimo. 4.3x la mediana de DPS/$ en L7. Falta saber su tiempo de ráfaga real. | Apoyada | Pendiente |
 | Nerf Sentry | L1 y L7 en 6.9x y 4.0x la mediana de DPS/$. Con 300$ iguala el DPS de nivel 1 del Incinerator (700$). | Apoyada | Pendiente |
 | Nerf Ion Cannon | 0.44x la mediana en L1 y 0.28x en L7 (50 DPS por 1300$). Solo compensaría con perforación, que este análisis no mide. | No apoyada con estos datos | Pendiente: medir con simulación antes de tocar |
 | Buff Scavenger | Es de las más eficientes (6.9x la mediana en L1, igual que Sentry, y 4.2x en L7) y la más barata (100$). | No apoyada con estos datos | Pendiente: ¿el problema es alcance (150) o escalado? Decidir |
@@ -56,9 +56,9 @@ Las líneas que tenías entre paréntesis las he contrastado con el código el 2
 | Mejoras para las torres, con mejora final | Hecho: 7 niveles, habilidad exclusiva en el nivel 7. |
 | Cada 10 oleadas un jefe | Hecho y más: Boss en la 10 y la 15, Matrioska en la 20, jefes cada 5 oleadas. |
 | Tanque que suelta tres rojos como matrioska | Cubierto por la cadena: Matrioska, que suelta 3 Boss (rojos), que sueltan 3 Tank. El Tank suelta 3 Walkers (verdes), no rojos. |
-| Líder de batalla con curación de 350 | Parcial: existe el Healer, pero su radio es 200, no 350. |
+| Líder de batalla con curación de 350 | Radio se mantiene en 200 (decisión posterior del usuario, en vez de 350). Al morir deja una zona de curación de 3,5 s: una aguja gira una vuelta desde arriba y va rellenando el área; cura 3 % de vida máxima cada 0,5 s y luego desaparece. |
 | Mago de hielo que dispara y ralentiza torres | Hecho: ICE_MAGE ataca a torres cercanas y las congela (ataque más lento, 3 s). |
-| Ninja rápido que paraliza torres 3 s y quita 1 vida | Parcial: es el más rápido (2.0), pero paraliza 2 s (120 frames) y quita 2 vidas. |
+| Ninja rápido que paraliza torres 3 s y quita 1 vida | Corregido: es el más rápido (2.0), paraliza 3 s (180 frames) y quita 1 vida. |
 | Centinela con escudo anti-aturdimiento | No hecho. |
 | Mezclar habilidades de dos torres | No hecho. |
 | Torre que roba stats, torre Brujo | No hecho. |
@@ -194,3 +194,21 @@ Cota inferior = sin Ninja/Ice Mage aleatorios, superior = con ellos siempre.
 | 25 | 88 | 370542 | 370542 | 3625 | 102.2 | 26787 |
 | 30 | 103 | 558773 | 558773 | 4217 | 132.5 | 39554 |
 
+## Nerf del Incinerator (PR fix/nerf-incinerator)
+
+Problema: cada llama tenía `pierce: 99` y golpeaba a TODOS los enemigos de su trayectoria, además de subir x1.52 de daño por nivel. Con 10 Matrioskas juntas el daño se multiplicaba por 10 y una sola torre las limpiaba en pocos segundos.
+
+Cambios (constantes en `config/balance.ts`):
+- `FLAME_MAX_TARGETS = 3`: una llama golpea como máximo a 3 enemigos (antes 99).
+- Mejora de daño por nivel: +5% y x1.25 (antes x1.45). El Pulverizer conserva x1.45.
+- Cooldown por nivel x0.95 (antes x0.9), mínimo 2.
+- La ráfaga (10 llamas + 30 frames de pausa) pasa a constantes (`FLAME_BURST_SHOTS`, `FLAME_BURST_PAUSE_FRAMES`) sin cambiar su valor.
+
+DPS real contra un objetivo (con la pausa entre ráfagas) y tiempo en limpiar 10 Matrioskas (2900 de vida cada una, Medium, oleada 1):
+| Nivel | Antes: daño / DPS / 10 Matrioskas | Ahora: daño / DPS / 10 Matrioskas |
+|---|---|---|
+| 1 | 9 / 90 / 32 s | 9 / 90 / 107 s |
+| 4 | 26 / 301 / 9.6 s | 16 / 172 / 56 s |
+| 7 | 87 / 1044 / 2.8 s | 33 / 380 / 25 s |
+
+El nivel 1 no cambia contra un objetivo, pero ya no escala con la multitud. Cumple OBJ-1 y OBJ-3 para esta torre (tests nuevos). Todo es ajustable con las constantes.
