@@ -665,6 +665,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       (enemy as any).isDefeated = true;
 
       soundManager.playEnemyKilled();
+      if (enemy.type === EnemyType.BOSS || enemy.type === EnemyType.MATRYOSHKA) soundManager.playBossDeath();
 
       // Spawn currency popup floating upward in green
       if (enemy.reward > 0) {
@@ -759,7 +760,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     if (isPaused || gameOver || (victory && !isEndless)) return;
 
     frameRef.current++;
-    Effects.trackTowerShots(towersRef.current);
+    Effects.trackTowerShots(towersRef.current, (type) => soundManager.playShot(type));
     Effects.update();
     
     fogRef.current.forEach(p => {
@@ -1092,8 +1093,10 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
            livesRef.current -= damage;
            waveStatsRef.current.damageTaken += damage;
            setLives(Math.max(0, livesRef.current));
+           soundManager.playLifeLost();
            
            if (livesRef.current <= 0 && !gameOver) {
+               soundManager.playDefeat();
                setGameOver(true);
            }
         }
@@ -2148,6 +2151,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       
       if (money >= upgradeCost && t.level < 7) {
           setMoney(m => m - upgradeCost);
+          soundManager.playUpgrade();
           t.level++;
           
           // Universal Damage Buff

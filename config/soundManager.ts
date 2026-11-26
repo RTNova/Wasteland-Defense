@@ -378,6 +378,172 @@ class SoundManager {
       osc.stop(startTime + (idx === notes.length - 1 ? 0.6 : 0.3));
     });
   }
+
+  // --- EFECTOS DE COMBATE ---
+  private noiseBuffer: AudioBuffer | null = null;
+  private lastShotAt = 0;
+  private lastShotByType: Record<string, number> = {};
+
+  private getNoise(): AudioBuffer | null {
+    if (!this.ctx) return null;
+    if (!this.noiseBuffer) {
+      const len = Math.floor(this.ctx.sampleRate * 0.4);
+      const buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
+      const data = buf.getChannelData(0);
+      for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
+      this.noiseBuffer = buf;
+    }
+    return this.noiseBuffer;
+  }
+
+  /** Ráfaga de ruido filtrada (disparos, llamas, golpes). */
+  private noiseBurst(duration: number, type: BiquadFilterType, freqStart: number, freqEnd: number, volume: number) {
+    if (!this.ctx || !this.sfxGainNode) return;
+    const buf = this.getNoise();
+    if (!buf) return;
+    const now = this.ctx.currentTime;
+    const src = this.ctx.createBufferSource();
+    src.buffer = buf;
+    const filter = this.ctx.createBiquadFilter();
+    filter.type = type;
+    filter.frequency.setValueAtTime(freqStart, now);
+    filter.frequency.exponentialRampToValueAtTime(Math.max(20, freqEnd), now + duration);
+    const gain = this.ctx.createGain();
+    gain.gain.setValueAtTime(volume, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+    src.connect(filter);
+    filter.connect(gain);
+    gain.connect(this.sfxGainNode);
+    src.start(now);
+    src.stop(now + duration + 0.02);
+  }
+
+  private tone(wave: OscillatorType, f0: number, f1: number, duration: number, volume: number) {
+    if (!this.ctx || !this.sfxGainNode) return;
+    const now = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = wave;
+    osc.frequency.setValueAtTime(f0, now);
+    osc.frequency.exponentialRampToValueAtTime(Math.max(20, f1), now + duration);
+    gain.gain.setValueAtTime(volume, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+    osc.connect(gain);
+    gain.connect(this.sfxGainNode);
+    osc.start(now);
+    osc.stop(now + duration + 0.02);
+  }
+
+  /** Disparo de torre. Limitado en frecuencia para que muchas torres no saturen el audio. */
+  public playShot(towerType: string) {
+    if (this.settings.sfxMuted) return;
+    const t = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    if (t - this.lastShotAt < 35) return;
+    if (t - (this.lastShotByType[towerType] || 0) < 90) return;
+    this.lastShotAt = t;
+    this.lastShotByType[towerType] = t;
+    this.initContext();
+    if (!this.ctx || !this.sfxGainNode) return;
+
+    switch (towerType) {
+      case 'SURVIVOR':
+        this.noiseBurst(0.07, 'bandpass', 2200, 700, 0.16);
+        this.tone('square', 260, 90, 0.05, 0.05);
+        break;
+      case 'TURRET':
+        this.noiseBurst(0.04, 'bandpass', 3000, 1200, 0.1);
+        break;
+      case 'SNIPER':
+        this.noiseBurst(0.16, 'lowpass', 4000, 300, 0.28);
+        this.tone('sine', 140, 40, 0.18, 0.2);
+        break;
+      case 'FLAMETHROWER':
+        this.noiseBurst(0.12, 'bandpass', 900, 500, 0.07);
+        break;
+      case 'TESLA':
+        this.tone('sawtooth', 1800, 200, 0.12, 0.07);
+        this.noiseBurst(0.08, 'highpass', 4000, 3000, 0.06);
+        break;
+      case 'LASER':
+        this.tone('sine', 1400, 180, 0.28, 0.12);
+        break;
+      case 'MORTAR':
+        this.tone('sine', 110, 35, 0.3, 0.3);
+        this.noiseBurst(0.2, 'lowpass', 900, 120, 0.2);
+        break;
+      case 'MONK':
+        this.tone('triangle', 520, 180, 0.12, 0.12);
+        break;
+      case 'CHEMIST':
+        this.tone('sine', 300, 700, 0.1, 0.12);
+        break;
+      case 'SHOCKWAVE':
+        this.tone('sine', 90, 30, 0.25, 0.25);
+        break;
+      default:
+        break;
+    }
+  }
+
+  /** Mejora de torre: arpegio corto ascendente. */
+  public playUpgrade() {
+    if (this.settings.sfxMuted) return;
+    this.initContext();
+    if (!this.ctx || !this.sfxGainNode) return;
+    const base = this.ctx.currentTime;
+    [392, 523, 659].forEach((f, i) => {
+      const osc = this.ctx!.createOscillator();
+      const gain = this.ctx!.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(f, base + i * 0.06);
+      gain.gain.setValueAtTime(0.001, base + i * 0.06);
+      gain.gain.linearRampToValueAtTime(0.16, base + i * 0.06 + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.001, base + i * 0.06 + 0.16);
+      osc.connect(gain);
+      gain.connect(this.sfxGainNode!);
+      osc.start(base + i * 0.06);
+      osc.stop(base + i * 0.06 + 0.18);
+    });
+  }
+
+  /** Un enemigo llega al final y quita vidas. */
+  public playLifeLost() {
+    if (this.settings.sfxMuted) return;
+    this.initContext();
+    if (!this.ctx || !this.sfxGainNode) return;
+    this.tone('sawtooth', 220, 70, 0.3, 0.2);
+    this.noiseBurst(0.18, 'lowpass', 1200, 200, 0.14);
+  }
+
+  /** Muerte de jefe: golpe grave largo. */
+  public playBossDeath() {
+    if (this.settings.sfxMuted) return;
+    this.initContext();
+    if (!this.ctx || !this.sfxGainNode) return;
+    this.tone('sine', 160, 28, 0.7, 0.4);
+    this.noiseBurst(0.6, 'lowpass', 1800, 80, 0.3);
+  }
+
+  /** Derrota: tres notas descendentes. */
+  public playDefeat() {
+    if (this.settings.sfxMuted) return;
+    this.initContext();
+    if (!this.ctx || !this.sfxGainNode) return;
+    const base = this.ctx.currentTime;
+    [330, 262, 196].forEach((f, i) => {
+      const osc = this.ctx!.createOscillator();
+      const gain = this.ctx!.createGain();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(f, base + i * 0.28);
+      gain.gain.setValueAtTime(0.001, base + i * 0.28);
+      gain.gain.linearRampToValueAtTime(0.18, base + i * 0.28 + 0.03);
+      gain.gain.exponentialRampToValueAtTime(0.001, base + i * 0.28 + (i === 2 ? 0.9 : 0.3));
+      osc.connect(gain);
+      gain.connect(this.sfxGainNode!);
+      osc.start(base + i * 0.28);
+      osc.stop(base + i * 0.28 + (i === 2 ? 0.95 : 0.35));
+    });
+  }
 }
 
 export const soundManager = new SoundManager();
