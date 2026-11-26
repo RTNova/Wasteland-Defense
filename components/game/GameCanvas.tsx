@@ -9,6 +9,7 @@ import { GameMenuModal } from '../ui/GameMenuModal';
 import { soundManager, SoundSettings } from '../../config/soundManager';
 import { SoundSettingsPanel } from '../ui/SoundSettingsPanel';
 import { getDifficultyConfig } from '../../config/difficulty';
+import { getUpgradeCost, applyUpgradeStats, getWaveHpMultiplier, getRewardMultiplier, getStartingMoney } from '../../config/balance';
 import { getEndlessScaling } from '../../config/endlessScaling';
 
 // --- SUB-COMPONENT: TOWER PREVIEW ---
@@ -197,7 +198,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   };
 
   // React State for UI
-  const [money, setMoney] = useState(450 + (upgrades.cashLevel * 50));
+  const [money, setMoney] = useState(getStartingMoney(upgrades.cashLevel));
   const [lives, setLives] = useState(100);
   const [wave, setWave] = useState(1);
   const [gameOver, setGameOver] = useState(false);
@@ -457,14 +458,14 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     const activeIsEndless = isEndlessRef.current;
 
     // Base difficulty multiplier from campaign/wave curve
-    const baseHpMultiplier = 1 + (Math.pow(waveNum - 1, 1.6) / 12);
+    const baseHpMultiplier = getWaveHpMultiplier(waveNum);
 
     // Dynamic Endless Mode Health and Speed scaling based on current wave number
     const endlessScaling = getEndlessScaling(waveNum, activeIsEndless);
     const hpMultiplier = baseHpMultiplier * endlessScaling.hpMultiplier;
     const scaledSpeed = Number((stats.speed * endlessScaling.speedMultiplier).toFixed(2));
 
-    const rewardMultiplier = 1 + (Math.pow(waveNum, 0.4) * 0.1) * (activeIsEndless ? (1 + (waveNum * 0.025)) : 1);
+    const rewardMultiplier = getRewardMultiplier(waveNum, activeIsEndless);
     const scaledHP = Math.round(stats.hp * hpMultiplier * diffConfig.healthMultiplier);
     const scaledReward = Math.round(stats.reward * rewardMultiplier);
 
@@ -504,12 +505,12 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       const waveNum = Math.max(1, wave);
       const activeIsEndless = isEndlessRef.current;
 
-      const baseHpMultiplier = 1 + (Math.pow(waveNum - 1, 1.6) / 12);
+      const baseHpMultiplier = getWaveHpMultiplier(waveNum);
       const endlessScaling = getEndlessScaling(waveNum, activeIsEndless);
       const hpMultiplier = baseHpMultiplier * endlessScaling.hpMultiplier;
       const scaledSpeed = Number((stats.speed * endlessScaling.speedMultiplier).toFixed(2));
 
-      const rewardMultiplier = 1 + (Math.pow(waveNum, 0.4) * 0.1) * (activeIsEndless ? (1 + (waveNum * 0.025)) : 1);
+      const rewardMultiplier = getRewardMultiplier(waveNum, activeIsEndless);
       const scaledHP = Math.round(stats.hp * hpMultiplier * diffConfig.healthMultiplier);
       const scaledReward = Math.round(stats.reward * rewardMultiplier);
 
@@ -2081,25 +2082,17 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       
       // NEW COST FORMULA: 60% Base + (20% Base * Level)
       // This scales linearly but keeps upgrades reasonably priced for their tier
-      const upgradeCost = Math.floor((t.cost * 0.6) + (t.cost * 0.2 * t.level));
+      const upgradeCost = getUpgradeCost(t.cost, t.level);
       
       if (money >= upgradeCost && t.level < 7) {
           setMoney(m => m - upgradeCost);
           t.level++;
           
-          // Universal Damage Buff
-          // Each level adds 5% cumulative damage on top of specific multipliers
-          t.damage = Math.floor(t.damage * 1.05);
-
-          // Specific Scaling
-          if (t.type === TowerType.FLAMETHROWER || t.type === TowerType.SHOCKWAVE) {
-             t.damage = Math.floor(t.damage * 1.45); // High damage scaling for flame/shock
-             t.cooldown = Math.max(2, t.cooldown * 0.9); // Fire rate increases (cooldown decreases)
-             // Range does NOT increase
-          } else {
-             t.damage = Math.floor(t.damage * 1.30); // 30% base damage increase per level for others
-             t.range = Math.floor(t.range * 1.1); // 10% range increase
-          }
+          // Fórmulas en config/balance.ts (applyUpgradeStats)
+          const next = applyUpgradeStats(t.type, { damage: t.damage, range: t.range, cooldown: t.cooldown });
+          t.damage = next.damage;
+          t.range = next.range;
+          t.cooldown = next.cooldown;
       }
   };
 
@@ -2506,7 +2499,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
                         if(!t) return null;
                         
                         // Calculate Upgrade Cost
-                        const upgradeCost = Math.floor((t.cost * 0.6) + (t.cost * 0.2 * t.level));
+                        const upgradeCost = getUpgradeCost(t.cost, t.level);
                         const canUpgrade = money >= upgradeCost && t.level < 7;
 
                         // Calculate Potential Buffs for Display
