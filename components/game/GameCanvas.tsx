@@ -131,6 +131,26 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   const towersRef = useRef<Tower[]>([]);
   const projectilesRef = useRef<Projectile[]>([]);
   const groundEffectsRef = useRef<GroundEffect[]>([]); 
+  // Tamaño visible del canvas: cabe en el área de juego manteniendo 4:3 (móvil vertical y horizontal)
+  const areaRef = useRef<HTMLDivElement>(null);
+  const [canvasFit, setCanvasFit] = useState({ w: 0, h: 0 });
+  useEffect(() => {
+    const el = areaRef.current;
+    if (!el) return;
+    const fit = () => {
+      const pad = window.innerWidth >= 1024 ? 32 : 8;
+      const aw = Math.max(0, el.clientWidth - pad);
+      const ah = Math.max(0, el.clientHeight - pad);
+      const w = Math.floor(Math.min(aw, ah * (CANVAS_WIDTH / CANVAS_HEIGHT), CANVAS_WIDTH));
+      setCanvasFit(prev => (prev.w === w ? prev : { w, h: Math.floor(w * CANVAS_HEIGHT / CANVAS_WIDTH) }));
+    };
+    fit();
+    const ro = new ResizeObserver(fit);
+    ro.observe(el);
+    window.addEventListener('orientationchange', fit);
+    return () => { ro.disconnect(); window.removeEventListener('orientationchange', fit); };
+  }, []);
+
   const currencyPopupsRef = useRef<CurrencyPopup[]>([]);
   const statusPopupsRef = useRef<StatusFeedbackPopup[]>([]);
   const lastStatusPopupTimeRef = useRef<Map<string, number>>(new Map());
@@ -2164,17 +2184,20 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   };
 
   return (
-    <div className="flex flex-col lg:flex-row h-screen w-screen overflow-hidden bg-neutral-900 text-neutral-200 touch-none select-none fixed inset-0">
+    <div className="gc-root flex flex-col lg:flex-row h-[100dvh] w-screen overflow-hidden bg-neutral-900 text-neutral-200 touch-none select-none fixed inset-0">
       
       {/* GAME AREA */}
-      <div className="relative flex-1 flex items-center justify-center bg-black p-2 lg:p-4 overflow-hidden">
+      <div ref={areaRef} className="gc-area relative flex-1 min-h-0 min-w-0 bg-black overflow-hidden">
+        <div className="absolute inset-0 flex items-center justify-center p-1 lg:p-4">
         <canvas
           ref={canvasRef}
           width={CANVAS_WIDTH}
           height={CANVAS_HEIGHT}
           onClick={handleCanvasClick}
-          className="w-full h-auto max-w-[800px] aspect-[4/3] bg-neutral-800 shadow-2xl border-2 border-neutral-700 rounded-sm"
+          className="block shrink-0 bg-neutral-800 shadow-2xl border-2 border-neutral-700 rounded-sm"
+          style={{ width: canvasFit.w || undefined, height: canvasFit.h || undefined }}
         />
+        </div>
 
         {/* Global Notification */}
         {notification && (
@@ -2186,7 +2209,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
         )}
 
         {/* TOP-RIGHT CONTROLS: DEBRIEF & MENU BUTTON */}
-        <div className="absolute top-4 right-4 flex items-center gap-2 z-40">
+        <div className="absolute top-1.5 right-1.5 lg:top-4 lg:right-4 flex items-center gap-2 z-40">
             {waveSummary && !isSummaryOpen && (
                 <button
                     onClick={() => {
@@ -2265,16 +2288,16 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
         )}
         
         {/* Floating UI Stats */}
-        <div className="absolute top-4 left-4 flex flex-wrap gap-2 lg:gap-3 pointer-events-none">
-            <div className="bg-neutral-900/90 border border-yellow-600/50 px-3 py-1 rounded flex items-center gap-2 text-yellow-500 font-bold text-sm lg:text-base shadow-lg backdrop-blur-sm">
+        <div className="gc-hud absolute top-1.5 left-1.5 lg:top-4 lg:left-4 max-w-[calc(100%-5.5rem)] lg:max-w-none flex flex-wrap gap-1 lg:gap-3 pointer-events-none">
+            <div className="bg-neutral-900/90 border border-yellow-600/50 px-2 lg:px-3 py-0.5 lg:py-1 rounded flex items-center gap-2 text-yellow-500 font-bold text-xs lg:text-base shadow-lg backdrop-blur-sm">
                 <Zap className="w-4 h-4" />
                 <span>${money}</span>
             </div>
-            <div className="bg-neutral-900/90 border border-red-600/50 px-3 py-1 rounded flex items-center gap-2 text-red-500 font-bold text-sm lg:text-base shadow-lg backdrop-blur-sm">
+            <div className="bg-neutral-900/90 border border-red-600/50 px-2 lg:px-3 py-0.5 lg:py-1 rounded flex items-center gap-2 text-red-500 font-bold text-xs lg:text-base shadow-lg backdrop-blur-sm">
                 <Heart className="w-4 h-4 fill-current" />
                 <span>{lives}</span>
             </div>
-            <div className="bg-neutral-900/90 border border-blue-600/50 px-3 py-1 rounded flex items-center gap-2 text-blue-400 font-bold text-sm lg:text-base shadow-lg backdrop-blur-sm">
+            <div className="bg-neutral-900/90 border border-blue-600/50 px-2 lg:px-3 py-0.5 lg:py-1 rounded flex items-center gap-2 text-blue-400 font-bold text-xs lg:text-base shadow-lg backdrop-blur-sm">
                 {isEndless ? <InfinityIcon className="w-4 h-4" /> : <Crosshair className="w-4 h-4" />}
                 <span>Wave {wave} {isEndless ? '(∞)' : `/ ${map.waves}`}</span>
             </div>
@@ -2292,11 +2315,11 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
                 </div>
               );
             })()}
-            <div className={`bg-neutral-900/90 border ${diffConfig.badgeBorder} px-3 py-1 rounded flex items-center gap-1.5 font-bold text-xs lg:text-sm shadow-lg backdrop-blur-sm ${diffConfig.badgeText}`} title={`Difficulty: ${diffConfig.name} (${diffConfig.healthMultiplier}x Mutant HP, ${diffConfig.densityMultiplier}x Wave Density, +${diffConfig.techPointReward} TP Completion Bounty)`}>
+            <div className={`bg-neutral-900/90 border ${diffConfig.badgeBorder} px-2 lg:px-3 py-0.5 lg:py-1 rounded flex items-center gap-1.5 font-bold text-xs lg:text-sm shadow-lg backdrop-blur-sm ${diffConfig.badgeText}`} title={`Difficulty: ${diffConfig.name} (${diffConfig.healthMultiplier}x Mutant HP, ${diffConfig.densityMultiplier}x Wave Density, +${diffConfig.techPointReward} TP Completion Bounty)`}>
                 <ShieldAlert className="w-3.5 h-3.5" />
                 <span>{diffConfig.name.toUpperCase()} ({diffConfig.healthMultiplier}x HP)</span>
             </div>
-            <div className={`bg-neutral-900/90 border px-3 py-1 rounded flex items-center gap-2 font-bold text-sm lg:text-base shadow-lg backdrop-blur-sm ${towersRef.current.length >= currentTowerLimit ? 'border-red-600/50 text-red-500' : 'border-neutral-600/50 text-neutral-400'}`}>
+            <div className={`bg-neutral-900/90 border px-3 py-1 rounded flex items-center gap-2 font-bold text-xs lg:text-base shadow-lg backdrop-blur-sm ${towersRef.current.length >= currentTowerLimit ? 'border-red-600/50 text-red-500' : 'border-neutral-600/50 text-neutral-400'}`}>
                 <span>Towers: {towersRef.current.length} / {currentTowerLimit}</span>
             </div>
         </div>
@@ -2416,7 +2439,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       </div>
 
       {/* SIDEBAR UI */}
-      <div className="w-full lg:w-80 h-[40vh] lg:h-full bg-neutral-800 border-t lg:border-t-0 lg:border-l border-neutral-700 flex flex-col z-10 shadow-2xl relative">
+      <div className="gc-side w-full lg:w-80 h-[40dvh] lg:h-full bg-neutral-800 border-t lg:border-t-0 lg:border-l border-neutral-700 flex flex-col z-10 shadow-2xl relative">
         
         {/* TOWER INFO TOOLTIP (FLOATING) */}
         {hoveredTowerType && (
@@ -2476,12 +2499,12 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
             </div>
         </div>
 
-        <div className="p-2 lg:p-4 grid grid-cols-2 gap-2 border-b border-neutral-800 bg-neutral-800">
-             <div className="col-span-2 grid grid-cols-3 gap-2 mb-2">
+        <div className="gc-ctrl p-2 lg:p-4 grid grid-cols-2 gap-2 border-b border-neutral-800 bg-neutral-800">
+             <div className="col-span-2 grid grid-cols-3 gap-2 mb-0 lg:mb-2">
                 <button 
                     onClick={startNextWave} 
                     disabled={waveActiveRef.current || gameOver || (victory && !isEndless)}
-                    className={`flex items-center justify-center gap-2 p-3 font-bold rounded transition text-sm lg:text-base ${
+                    className={`flex items-center justify-center gap-2 p-2 lg:p-3 font-bold rounded transition text-sm lg:text-base ${
                         waveActiveRef.current 
                         ? 'bg-neutral-700 text-neutral-500 cursor-not-allowed' 
                         : 'bg-green-700 hover:bg-green-600 text-white'
@@ -2492,7 +2515,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
                 </button>
                 <button 
                     onClick={() => setIsPaused(!isPaused)}
-                    className={`flex items-center justify-center gap-2 p-3 font-bold rounded text-sm lg:text-base ${
+                    className={`flex items-center justify-center gap-2 p-2 lg:p-3 font-bold rounded text-sm lg:text-base ${
                         isPaused ? 'bg-yellow-600 text-white animate-pulse' : 'bg-neutral-700 hover:bg-neutral-600 text-white'
                     }`}
                     title={isPaused ? "Resume" : "Pause"}
@@ -2501,7 +2524,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
                 </button>
                 <button 
                     onClick={onExit}
-                    className="flex items-center justify-center gap-2 p-3 bg-red-900/50 hover:bg-red-800 text-red-200 font-bold rounded text-sm lg:text-base"
+                    className="flex items-center justify-center gap-2 p-2 lg:p-3 bg-red-900/50 hover:bg-red-800 text-red-200 font-bold rounded text-sm lg:text-base"
                     title="Exit Mission"
                 >
                     <LogOut className="w-5 h-5" />
@@ -2527,7 +2550,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
 
         <div className="flex-1 overflow-y-auto p-2 lg:p-4">
             <h3 className="text-xs font-bold text-neutral-500 mb-2 uppercase tracking-widest">Defenses (Drag to Map)</h3>
-            <div className="grid grid-cols-4 lg:grid-cols-2 gap-2 lg:gap-3">
+            <div className="gc-towers grid grid-cols-6 lg:grid-cols-2 gap-1.5 lg:gap-3">
                 {Object.values(TOWER_DEFINITIONS).map((def) => {
                     const stats = getTowerStats(def.type as TowerType);
                     const canAfford = money >= stats.cost;
@@ -2539,14 +2562,14 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
                             }}
                             onMouseEnter={() => setHoveredTowerType(def.type as TowerType)}
                             onMouseLeave={() => setHoveredTowerType(null)}
-                            className={`relative p-2 rounded border-2 flex flex-col items-center gap-1 transition select-none touch-none ${
+                            className={`relative p-1 lg:p-2 rounded border-2 flex flex-col items-center gap-0.5 lg:gap-1 transition select-none touch-none ${
                                 canAfford 
                                 ? 'bg-neutral-900 border-neutral-700 cursor-grab active:cursor-grabbing hover:border-neutral-500 hover:bg-neutral-800' 
                                 : 'bg-neutral-900/50 border-neutral-800 opacity-50 cursor-not-allowed'
                             }`}
                         >
                             {/* TOWER PREVIEW COMPONENT */}
-                            <div className="w-12 h-12 lg:w-16 lg:h-16 rounded-full shadow-sm border border-white/10 flex items-center justify-center bg-black/30 overflow-hidden">
+                            <div className="w-10 h-10 lg:w-16 lg:h-16 rounded-full shadow-sm border border-white/10 flex items-center justify-center bg-black/30 overflow-hidden">
                                 <TowerPreview type={def.type as TowerType} />
                             </div>
 
