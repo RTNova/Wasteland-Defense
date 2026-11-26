@@ -99,48 +99,88 @@ export const drawTower = ({ ctx, frame }: DrawContext, tower: Tower, isGhost: bo
     
     // --- SPECIAL BASES ---
     
-    // TESLA COIL RENDER (Classic & Aggressive)
+    // TESLA COIL: vista desde arriba, simétrica (no depende del giro hacia el objetivo)
     if (type === TowerType.TESLA) {
-        // Base
-        ctx.fillStyle = '#111';
-        ctx.fillRect(-10, -5, 20, 10);
-        
-        // Coils
-        ctx.strokeStyle = level === 7 ? '#d8b4fe' : '#b87333'; // Purple or Copper
-        ctx.lineWidth = 4;
-        ctx.beginPath();
-        ctx.moveTo(-6, -5); ctx.lineTo(-6, -25);
-        ctx.moveTo(6, -5); ctx.lineTo(6, -25);
-        ctx.stroke();
-        
-        // Rings
-        ctx.strokeStyle = level === 7 ? '#a855f7' : '#d97706';
-        ctx.lineWidth = 2;
-        for(let i=0; i<4; i++) {
-            ctx.beginPath(); ctx.moveTo(-8, -10 - (i*5)); ctx.lineTo(8, -10 - (i*5)); ctx.stroke();
-        }
-        
-        // Top Sphere
-        const coreSize = 8 + Math.sin(frame * 0.5) * 1;
-        ctx.fillStyle = color;
-        ctx.shadowColor = color;
-        ctx.shadowBlur = 15;
-        ctx.beginPath(); ctx.arc(0, -30, coreSize, 0, Math.PI*2); ctx.fill();
-        ctx.shadowBlur = 0;
+        ctx.rotate(-rotation); // cancela el giro: una bobina vista de lado girando se veía mal
+        const max = level >= 7;
+        const main = max ? '#e9d5ff' : '#bae6fd';
+        const glow = max ? '#a855f7' : '#38bdf8';
+        const n = max ? 6 : level >= 4 ? 5 : 4;      // más electrodos al subir de nivel
+        const seed = Math.floor(frame / 3);           // los rayos cambian cada 3 frames, no cada frame
+        const rnd = (k: number) => { const x = Math.sin(seed * 12.9898 + k * 78.233) * 43758.5453; return x - Math.floor(x); };
+        const pulse = 0.5 + 0.5 * Math.sin(frame * 0.25);
 
-        // Aggressive Arcs to ground/base
-        if (!isGhost && frame % 5 === 0) {
-             ctx.strokeStyle = '#fff';
-             ctx.lineWidth = 1.5;
-             ctx.beginPath();
-             const startX = (Math.random()-0.5) * 10;
-             const startY = -30 + (Math.random()-0.5) * 10;
-             ctx.moveTo(startX, startY);
-             // Jagged line to random ground point
-             ctx.lineTo(startX * 2, -10);
-             ctx.lineTo((Math.random()-0.5) * 20, 5);
-             ctx.stroke();
+        // Sombra y base metálica octogonal
+        if (!isGhost) {
+            ctx.fillStyle = 'rgba(0,0,0,0.5)';
+            ctx.beginPath(); ctx.arc(2, 2, 17, 0, Math.PI * 2); ctx.fill();
         }
+        ctx.fillStyle = '#18181b';
+        ctx.beginPath();
+        for (let k = 0; k < 8; k++) {
+            const a = (Math.PI / 4) * k + Math.PI / 8;
+            const bx = Math.cos(a) * 16, by = Math.sin(a) * 16;
+            if (k === 0) ctx.moveTo(bx, by); else ctx.lineTo(bx, by);
+        }
+        ctx.closePath(); ctx.fill();
+        ctx.strokeStyle = max ? '#a855f7' : '#b87333';
+        ctx.lineWidth = 2; ctx.stroke();
+
+        // Anillo de cobre
+        ctx.strokeStyle = max ? '#7e22ce' : '#d97706';
+        ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.arc(0, 0, 11, 0, Math.PI * 2); ctx.stroke();
+
+        // Electrodos girando despacio + rayos hasta el orbe central
+        const spin = frame * 0.012;
+        for (let k = 0; k < n; k++) {
+            const a = spin + (Math.PI * 2 * k) / n;
+            const tx = Math.cos(a) * 22, ty = Math.sin(a) * 22;
+            // pincho
+            ctx.strokeStyle = '#71717a'; ctx.lineWidth = 3;
+            ctx.beginPath(); ctx.moveTo(Math.cos(a) * 11, Math.sin(a) * 11); ctx.lineTo(tx, ty); ctx.stroke();
+            ctx.fillStyle = glow;
+            ctx.beginPath(); ctx.arc(tx, ty, 3, 0, Math.PI * 2); ctx.fill();
+
+            // rayo dentado orbe -> punta (aparece de forma intermitente)
+            if (rnd(k) > 0.25) {
+                const pts: [number, number][] = [[0, 0]];
+                const segs = 4;
+                const nx = -Math.sin(a), ny = Math.cos(a);
+                for (let q = 1; q < segs; q++) {
+                    const f = q / segs;
+                    const off = (rnd(k * 7 + q) - 0.5) * 12;
+                    pts.push([Math.cos(a) * 22 * f + nx * off, Math.sin(a) * 22 * f + ny * off]);
+                }
+                pts.push([tx, ty]);
+                const trace = () => { ctx.beginPath(); pts.forEach(([x, y], idx) => idx ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.stroke(); };
+                ctx.lineJoin = 'round';
+                ctx.strokeStyle = glow; ctx.globalAlpha = 0.45; ctx.lineWidth = 4; trace();
+                ctx.globalAlpha = 1; ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.2; trace();
+            }
+        }
+
+        // Chispas que saltan entre electrodos vecinos (solo nivel 4+)
+        if (level >= 4 && !isGhost && rnd(99) > 0.5) {
+            const k = Math.floor(rnd(98) * n);
+            const a1 = spin + (Math.PI * 2 * k) / n, a2 = spin + (Math.PI * 2 * (k + 1)) / n;
+            ctx.strokeStyle = main; ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(Math.cos(a1) * 22, Math.sin(a1) * 22);
+            ctx.lineTo(Math.cos((a1 + a2) / 2) * 25 + (rnd(97) - 0.5) * 4, Math.sin((a1 + a2) / 2) * 25 + (rnd(96) - 0.5) * 4);
+            ctx.lineTo(Math.cos(a2) * 22, Math.sin(a2) * 22);
+            ctx.stroke();
+        }
+
+        // Orbe central con brillo (degradado, sin shadowBlur para no costar FPS)
+        const r = 5 + pulse * 1.5;
+        const g = ctx.createRadialGradient(0, 0, 0, 0, 0, r + 6);
+        g.addColorStop(0, '#ffffff');
+        g.addColorStop(0.35, main);
+        g.addColorStop(0.7, glow);
+        g.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = g;
+        ctx.beginPath(); ctx.arc(0, 0, r + 6, 0, Math.PI * 2); ctx.fill();
 
         ctx.restore();
         return;
