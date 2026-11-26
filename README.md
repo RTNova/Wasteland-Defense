@@ -2,7 +2,7 @@
 
 # ☢️ WASTELAND DEFENSE
 
-**Tower Defense apocalíptico construido con React + TypeScript. 9 torres, 6 tipos de enemigos, efectos de estado, modo Endless procedural y un Bestiario con simulación de combate en vivo.**
+**Tower Defense apocalíptico construido con React + TypeScript. 11 torres, 8 tipos de enemigos, efectos de estado, modo Endless procedural y un Bestiario con simulación de combate en vivo.**
 
 ![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.8-3178C6?logo=typescript&logoColor=white)
@@ -45,8 +45,8 @@ Esto es un proyecto aún en desarrollo, por lo que todavía no cumple ni con mis
 ## ✨ Características
 
 - 🗺️ **7 mapas** con dificultad creciente (Fácil → Extremo), cada uno con su propio trazado de camino y, en los más avanzados, **obstáculos** (edificios, agua, escombros) que decoran el terreno.
-- 🏰 **9 tipos de torre**, cada una con mecánica única (cadena eléctrica, beam perforante, homing global, buff de área...) y **7 niveles de mejora**, con una habilidad especial exclusiva al alcanzar el nivel máximo.
-- 🧟 **6 tipos de enemigo**, incluyendo un **jefe matrioska** que al morir genera 3 jefes normales (que a su vez generan tanques al morir) y una **sanadora** que cura en área y hace un heal-burst al morir.
+- 🏰 **11 tipos de torre** (incluye Command Link de apoyo y Pulverizer), cada una con mecánica única (cadena eléctrica, beam perforante, homing global, buff de área...) y **7 niveles de mejora**, con una habilidad especial exclusiva al alcanzar el nivel máximo.
+- 🧟 **8 tipos de enemigo**, incluyendo un **jefe matrioska** que al morir genera 3 jefes normales (que a su vez generan tanques al morir) y una **sanadora** que cura en área y hace un heal-burst al morir.
 - 🔥 **Sistema de efectos de estado** completo: quemadura (daño por tiempo), veneno (% de vida máxima por segundo), ralentización por ácido, vulnerabilidad (+15% de daño recibido), reducción de curación y congelación.
 - ♾️ **Modo Endless** con generación procedural de oleadas más allá del contenido fijo, y recompensas de Tech Points cada 10 oleadas.
 - 🎚️ **Escalado dinámico de dificultad**: la vida y la recompensa de cada enemigo crecen con la oleada (`hp × (1 + oleada^1.6 / 12)`), y el límite de torres colocables aumenta cada 10 oleadas.
@@ -126,12 +126,19 @@ Wasteland-Defense/
 │       ├── Shop.tsx             # Armory (mejoras permanentes)
 │       └── Bestiary.tsx         # Ficha + simulación de combate
 ├── config/
-│   └── constants.ts             # Mapas, definición de torres/enemigos, generateWaves
+│   ├── constants.ts             # Mapas, definición de torres/enemigos, generateWaves
+│   └── balance.ts               # Fórmulas de balance puras (coste de mejora, escalado de vida...)
+├── scripts/
+│   ├── balance-analysis.ts      # Cálculos del análisis estático
+│   └── balance-report.ts        # Informe en Markdown (npm run balance)
+├── tests/
+│   └── balance.test.ts          # Pruebas de fórmulas, datos y objetivos de balance (npm test)
 ├── types/
 │   └── index.ts                 # Tipos compartidos (Enemy, Tower, Projectile...)
 ├── App.tsx                      # Enrutado de vistas y estado global de perfil/progreso
 ├── index.tsx / index.html
 ├── package.json / vite.config.ts / tsconfig.json
+├── BALANCE.md                   # Seguimiento de balance: hipótesis, decisiones y cambios
 └── README.md
 ```
 
@@ -158,17 +165,41 @@ Aun así, dispone de su versión online (puedes ver el enlace en la cabecera del
 
 ---
 
+## ⚖️ Balance y pruebas
+
+- `npm test` ejecuta las pruebas (Vitest): fórmulas, coherencia de datos y objetivos de balance.
+- `npm run balance` imprime el informe de balance (DPS, coste, curvas de oleada y economía).
+- [BALANCE.md](BALANCE.md) es el documento de seguimiento: qué torres o enemigos parecen fuertes o débiles, qué se ha decidido y el registro de cambios.
+- Las fórmulas de balance están en `config/balance.ts` y las usa el propio juego, así que las pruebas miden lo que se juega.
+
+El análisis es estático (no simula combate). Los límites están explicados en BALANCE.md.
+
+---
+
+## 📝 Historial de cambios del proyecto
+
+Se actualiza con cada cambio relevante.
+
+| Fecha | Cambio |
+|---|---|
+| 26/11/2026 | Efectos visuales: partículas, screen shake y números de daño (PR #1). |
+| 26/11/2026 | Fogonazos y retroceso de torres, luces de disparo, polvo/ceniza y viñeta (PR #2). |
+| 26/11/2026 | Pruebas de balance, análisis estático, `config/balance.ts` y BALANCE.md. README actualizado. |
+
+---
+
 ## 🗺️ Roadmap
 
-- [x] 9 torres con niveles y habilidades de nivel máximo
-- [x] 6 enemigos con mecánicas propias (generación en cadena, curación)
+- [x] 11 torres con niveles y habilidades de nivel máximo
+- [x] 8 enemigos con mecánicas propias (generación en cadena, curación, ataque a torres, parálisis)
+- [x] Pruebas de balance y análisis estático (`npm test`, `npm run balance`, ver [BALANCE.md](BALANCE.md))
 - [x] Modo Endless con generación procedural
 - [x] Bestiario con simulación de combate real
 - [x] Sistema de perfiles y meta-progresión persistente
 - [ ] Guardado en la nube / cuentas de usuario
 - [ ] Más mapas y torres
 - [ ] Tabla de puntuaciones global (actualmente todo es local)
-- [ ] Sonido y música
+- [ ] Sonido y música (hay efectos básicos y panel de ajustes en `config/soundManager.ts`; falta música y repaso)
 - [ ] Balanceo adicional en oleadas tardías del modo Endless
 
 ---
@@ -178,7 +209,7 @@ Aun así, dispone de su versión online (puedes ver el enlace en la cabecera del
 El repositorio contiene actualmente **dos definiciones de tipos y constantes duplicadas**:
 
 - `/types.ts` y `/constants.ts` (raíz) — versión antigua: 4 enemigos, 7 torres, 3 mapas, sin niveles ni obstáculos.
-- `/types/index.ts` y `/config/constants.ts` — versión actual y activa: 6 enemigos, 9 torres, 7 mapas, con niveles, obstáculos y efectos de estado.
+- `/types/index.ts` y `/config/constants.ts` — versión actual y activa: 8 enemigos, 11 torres, 7 mapas, con niveles, obstáculos y efectos de estado.
 
 Todos los componentes reales (`App.tsx`, `GameCanvas.tsx`, `RenderUtils.ts`, `Bestiary.tsx`...) importan desde `types/index` y `config/constants`, por lo que los archivos de la raíz son restos huérfanos de una iteración anterior que conviene eliminar para evitar confusión.
 
