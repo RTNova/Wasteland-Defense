@@ -58,6 +58,8 @@ export interface Enemy {
   onDeathSpawn?: { type: EnemyType; count: number }; // Matryoshka logic
   isHealer?: boolean; // Healer logic
   healTimer?: number; // Frames until next heal pulse
+  healPulse?: number; // Frames restantes del anillo visible de curación del Healer
+  healFlash?: number; // Frames restantes del destello verde en un enemigo curado
   attackRange?: number; // For Ice Mage
   attackCooldown?: number; // For Ice Mage
   // Status Effects
@@ -150,7 +152,7 @@ export interface GroundEffect {
   radius: number;
   lifespan: number;
   maxLifespan?: number; // For progress animations (charging)
-  type: 'ACID_POOL' | 'DELAYED_HEAL' | 'HEAL_ZONE' | 'FIRE_POOL' | 'SHOCKWAVE';
+  type: 'ACID_POOL' | 'DELAYED_HEAL' | 'HEAL_ZONE' | 'FIRE_POOL' | 'SHOCKWAVE' | 'HEAL_BURST';
   damagePerFrame: number;
   healAmount?: number; // For delayed heal
   slowFactor: number; // 0.5 means 50% speed

@@ -1,7 +1,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { Enemy, Tower, Projectile, GameMap, EnemyType, TowerType, Point, GlobalUpgrades, DragState, GroundEffect, CurrencyPopup, StatusFeedbackPopup, DifficultyLevel } from '../../types/index';
-import { CANVAS_HEIGHT, CANVAS_WIDTH, ENEMY_STATS, TOWER_DEFINITIONS, generateWaves, NINJA_STUN_FRAMES, HEALER_HEAL_RADIUS, HEALER_ZONE_FRAMES, HEALER_ZONE_TICK_FRAMES, HEALER_ZONE_TICK_PCT } from '../../config/constants';
+import { CANVAS_HEIGHT, CANVAS_WIDTH, ENEMY_STATS, TOWER_DEFINITIONS, generateWaves, NINJA_STUN_FRAMES, HEALER_HEAL_RADIUS, HEALER_ZONE_FRAMES, HEALER_ZONE_TICK_FRAMES, HEALER_ZONE_TICK_PCT, HEALER_BURST_PCT, HEALER_BURST_FRAMES, HEALER_PULSE_FRAMES, HEALER_FLASH_FRAMES } from '../../config/constants';
 import { Heart, Zap, Crosshair, Play, Pause, LogOut, FastForward, Repeat, ArrowUp, Terminal, Skull, Minimize2, Maximize2, Sword, Infinity as InfinityIcon, BarChart3, CheckCircle2, ShieldAlert, Sliders, X } from 'lucide-react';
 import { Effects } from './Effects';
 import { buildTerrainLayers, TerrainLayers } from './Terrain';
@@ -253,6 +253,34 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   }, [isEndless]);
 
   const [isPaused, setIsPaused] = useState(false);
+  // Números de curación agregados (uno por pulso del Healer, no uno por tropa) + total curado
+  const healTextsRef = useRef<{ x: number; y: number; text: string; life: number; max: number; big: boolean }[]>([]);
+  const totalHealedRef = useRef(0);
+  const [totalHealed, setTotalHealed] = useState(0);
+  const fmtHeal = (n: number) => n >= 10000 ? `${(n / 1000).toFixed(0)}k` : n >= 1000 ? `${(n / 1000).toFixed(1)}k` : `${Math.round(n)}`;
+  const pushHealText = (x: number, y: number, text: string, big: boolean) => {
+    const list = healTextsRef.current;
+    list.push({ x, y, text, life: big ? 70 : 50, max: big ? 70 : 50, big });
+    while (list.length > 12) list.shift(); // tope: nunca más de 12 números de curación a la vez
+  };
+  // Cura a un aliado respetando la reducción de curación y el máximo. Devuelve la vida realmente curada.
+  const healEnemy = (ally: Enemy, amount: number): number => {
+    if (ally.healingReduction) amount *= (1 - ally.healingReduction);
+    const gained = Math.min(ally.maxHealth - ally.health, amount);
+    if (gained <= 0) return 0;
+    ally.health += gained;
+    ally.healFlash = HEALER_FLASH_FRAMES;
+    return gained;
+  };
+  // Resumen de un pulso: un solo número agregado sobre el origen; números por tropa solo si son pocas (<=3)
+  const announceHeal = (ox: number, oy: number, list: { e: Enemy; g: number }[], big: boolean) => {
+    if (list.length === 0) return;
+    const total = list.reduce((a, b) => a + b.g, 0);
+    totalHealedRef.current += total;
+    setTotalHealed(Math.round(totalHealedRef.current));
+    pushHealText(ox, oy, `+${fmtHeal(total)}${list.length > 1 ? ` (${list.length})` : ''}`, big);
+    if (list.length <= 3) list.forEach(({ e, g }) => pushHealText(e.x, e.y - e.radius - 4, `+${fmtHeal(g)}`, false));
+  };
   const [dropWarning, setDropWarning] = useState<string | null>(null);
   const dropWarningTimer = useRef<number | undefined>(undefined);
   const showDropWarning = (msg: string) => {
@@ -819,12 +847,29 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     groundEffectsRef.current.forEach(g => {
         g.lifespan--;
         if (g.type === 'HEAL_ZONE' && g.lifespan > 0 && (g.maxLifespan! - g.lifespan) % HEALER_ZONE_TICK_FRAMES === 0) {
+             const healed: { e: Enemy; g: number }[] = [];
              enemiesRef.current.forEach(ally => {
                  if (ally.health > 0 && ally.health < ally.maxHealth && getDistance(ally, {x: g.x, y: g.y}) <= g.radius) {
-                     let heal = ally.maxHealth * HEALER_ZONE_TICK_PCT;
-                     if (ally.healingReduction) heal *= (1 - ally.healingReduction);
-                     ally.health = Math.min(ally.maxHealth, ally.health + heal);
+                     const gg = healEnemy(ally, ally.maxHealth * HEALER_ZONE_TICK_PCT);
+                     if (gg > 0) healed.push({ e: ally, g: gg });
                  }
+             });
+             announceHeal(g.x, g.y - 22, healed, false);
+        }
+        if (g.type === 'HEAL_ZONE' && g.lifespan <= 0) {
+             // Pulso final: al completar el barrido, destello verde y curación extra a los aliados dentro
+             const healed: { e: Enemy; g: number }[] = [];
+             enemiesRef.current.forEach(ally => {
+                 if (ally.health > 0 && getDistance(ally, {x: g.x, y: g.y}) <= g.radius) {
+                     const gg = healEnemy(ally, ally.maxHealth * HEALER_BURST_PCT);
+                     if (gg > 0) healed.push({ e: ally, g: gg });
+                 }
+             });
+             announceHeal(g.x, g.y - 26, healed, true);
+             groundEffectsRef.current.push({
+                 id: Math.random().toString(), x: g.x, y: g.y, radius: g.radius,
+                 lifespan: HEALER_BURST_FRAMES, maxLifespan: HEALER_BURST_FRAMES, type: 'HEAL_BURST',
+                 damagePerFrame: 0, healAmount: 0, slowFactor: 1
              });
         }
         if (g.type === 'DELAYED_HEAL' && g.lifespan <= 0) {
@@ -840,6 +885,8 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
         }
     });
     groundEffectsRef.current = groundEffectsRef.current.filter(g => g.lifespan > 0);
+    healTextsRef.current.forEach(t => { t.life--; t.y -= 0.5; });
+    healTextsRef.current = healTextsRef.current.filter(t => t.life > 0);
 
     // Update Currency Popups (Float upward with slight deceleration, lifespan tick)
     currencyPopupsRef.current.forEach(popup => {
@@ -1096,22 +1143,25 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
           }
       }
 
+      if (enemy.healPulse && enemy.healPulse > 0) enemy.healPulse--;
+      if (enemy.healFlash && enemy.healFlash > 0) enemy.healFlash--;
       if (enemy.isHealer) {
           if (enemy.healTimer === undefined) enemy.healTimer = 90;
           enemy.healTimer--;
           
           if (enemy.healTimer <= 0) {
               enemy.healTimer = 90; 
+              enemy.healPulse = HEALER_PULSE_FRAMES; // anillo visible cada vez que cura
+              const healed: { e: Enemy; g: number }[] = [];
               enemiesRef.current.forEach(ally => {
                   if (ally.id !== enemy.id && ally.health > 0 && ally.health < ally.maxHealth) {
-                      const dist = getDistance(enemy, ally);
-                      if (dist <= HEALER_HEAL_RADIUS) {
-                          let healAmount = ally.maxHealth * 0.05;
-                          if (ally.healingReduction) healAmount *= (1 - ally.healingReduction);
-                          ally.health = Math.min(ally.maxHealth, ally.health + healAmount);
+                      if (getDistance(enemy, ally) <= HEALER_HEAL_RADIUS) {
+                          const g = healEnemy(ally, ally.maxHealth * 0.05);
+                          if (g > 0) healed.push({ e: ally, g });
                       }
                   }
               });
+              announceHeal(enemy.x, enemy.y - enemy.radius - 16, healed, false);
               const baseSelfHeal = enemy.maxHealth * 0.05;
               const missingHp = enemy.maxHealth - enemy.health;
               let totalSelfHeal = baseSelfHeal + (missingHp * 0.01);
@@ -1922,6 +1972,22 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     // 6.7 Partículas y números de daño
     Effects.drawParticles(ctx);
     Effects.drawDamageNumbers(ctx);
+    if (healTextsRef.current.length > 0) {
+        ctx.save();
+        ctx.textAlign = 'center';
+        ctx.lineJoin = 'round';
+        healTextsRef.current.forEach(t => {
+            const a = Math.min(1, t.life / (t.max * 0.5));
+            ctx.globalAlpha = a;
+            ctx.font = t.big ? 'bold 18px monospace' : 'bold 12px monospace';
+            ctx.lineWidth = 3;
+            ctx.strokeStyle = 'rgba(0,0,0,0.85)';
+            ctx.strokeText(t.text, t.x, t.y);
+            ctx.fillStyle = t.big ? '#bbf7d0' : '#4ade80';
+            ctx.fillText(t.text, t.x, t.y);
+        });
+        ctx.restore();
+    }
     Effects.drawAtmosphere(ctx);
 
     // 7. Drifting Fog Layer
@@ -2395,6 +2461,11 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
                 {isEndless ? <InfinityIcon className="w-4 h-4" /> : <Crosshair className="w-4 h-4" />}
                 <span>Wave {wave} {isEndless ? '(∞)' : `/ ${map.waves}`}</span>
             </div>
+            {totalHealed > 0 && (
+                <div className="bg-neutral-900/90 border border-green-600/50 px-2 lg:px-3 py-0.5 lg:py-1 rounded flex items-center gap-1 text-green-400 font-bold text-xs lg:text-base shadow-lg backdrop-blur-sm" title="Vida total curada por Healers">
+                    <span>+</span><span>{fmtHeal(totalHealed)} curado</span>
+                </div>
+            )}
             {isEndless && (() => {
               const endlessScale = getEndlessScaling(wave, true);
               return (
