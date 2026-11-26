@@ -11,7 +11,7 @@ import { GameMenuModal } from '../ui/GameMenuModal';
 import { soundManager, SoundSettings } from '../../config/soundManager';
 import { SoundSettingsPanel } from '../ui/SoundSettingsPanel';
 import { getDifficultyConfig } from '../../config/difficulty';
-import { getUpgradeCost, applyUpgradeStats, getWaveHpMultiplier, getRewardMultiplier, getStartingMoney } from '../../config/balance';
+import { FLAME_MAX_TARGETS, FLAME_BURST_SHOTS, FLAME_BURST_PAUSE_FRAMES, getUpgradeCost, applyUpgradeStats, getWaveHpMultiplier, getRewardMultiplier, getStartingMoney } from '../../config/balance';
 import { getEndlessScaling } from '../../config/endlessScaling';
 
 // --- SUB-COMPONENT: TOWER PREVIEW ---
@@ -1290,13 +1290,13 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
                  velocity: { x: Math.cos(randomizedAngle) * 5, y: Math.sin(randomizedAngle) * 5 }, 
                  speed: 5, damage: effectiveDamage,
                  color: tower.level >= 7 ? '#3b82f6' : '#ff5500',
-                 radius: 5, type: 'FLAME', pierce: 99, lifespan: 30, hitIds: [], 
+                 radius: 5, type: 'FLAME', pierce: FLAME_MAX_TARGETS, lifespan: 30, hitIds: [], 
                  isBlueFire: tower.level >= 7,
                  healingReduction: healRed 
             });
             tower.burstCount++;
-            if (tower.burstCount >= 10) {
-                tower.cooldownTimer = 30 / speedMult; 
+            if (tower.burstCount >= FLAME_BURST_SHOTS) {
+                tower.cooldownTimer = FLAME_BURST_PAUSE_FRAMES / speedMult; 
                 tower.burstCount = 0;
             }
         }
