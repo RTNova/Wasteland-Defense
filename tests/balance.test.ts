@@ -15,7 +15,7 @@ import { TOWER_DEFINITIONS, ENEMY_STATS, MAPS, generateWaves, CANVAS_WIDTH, CANV
 import { getEndlessScaling } from '../config/endlessScaling';
 import { DIFFICULTY_CONFIGS } from '../config/difficulty';
 import {
-  applyUpgradeStats, getUpgradeCost, getWaveHpMultiplier, getRewardMultiplier, getStartingMoney, TOWER_MAX_LEVEL,
+  applyUpgradeStats, FLAME_MAX_TARGETS, flameSecondsToClear, flameRealDps, getUpgradeCost, getWaveHpMultiplier, getRewardMultiplier, getStartingMoney, TOWER_MAX_LEVEL,
 } from '../config/balance';
 import { EnemyType, TowerType } from '../types/index';
 import {
@@ -40,10 +40,18 @@ describe('fórmulas (config/balance.ts)', () => {
     expect(applyUpgradeStats('SURVIVOR', { damage: 40, range: 150, cooldown: 40 })).toEqual({ damage: 54, range: 165, cooldown: 40 });
   });
 
-  it('mejora de Incinerator/Pulverizer: +5% y +45% de daño, cooldown x0.9 (mínimo 2), sin alcance', () => {
+  it('mejora de Incinerator: +5% y +25% de daño, cooldown x0.95 (mínimo 2), sin alcance', () => {
     const r = applyUpgradeStats('FLAMETHROWER', { damage: 9, range: 150, cooldown: 3 });
-    expect(r.damage).toBe(13);
+    expect(r.damage).toBe(11);
     expect(r.range).toBe(150);
+    expect(r.cooldown).toBeCloseTo(2.85);
+    expect(applyUpgradeStats('FLAMETHROWER', { damage: 9, range: 150, cooldown: 2.05 }).cooldown).toBe(2);
+  });
+
+  it('mejora de Pulverizer (sin cambios): +5% y +45% de daño, cooldown x0.9 (mínimo 2), sin alcance', () => {
+    const r = applyUpgradeStats('SHOCKWAVE', { damage: 30, range: 110, cooldown: 3 });
+    expect(r.damage).toBe(44);
+    expect(r.range).toBe(110);
     expect(r.cooldown).toBeCloseTo(2.7);
     expect(applyUpgradeStats('SHOCKWAVE', { damage: 30, range: 110, cooldown: 2.1 }).cooldown).toBe(2);
   });
@@ -224,5 +232,45 @@ describe('objetivos de balance', () => {
   it.fails('OBJ-6: el Healer rinde al menos 1/100 de su vida en recompensa (hoy 1/424: matarlo no compensa)', () => {
     const eff = effectiveEnemy(EnemyType.HEALER, 10);
     expect(eff.hp / eff.reward).toBeLessThanOrEqual(100);
+  });
+});
+
+describe('Incinerator (nerf): una llama ya no atraviesa a todos', () => {
+  const flame = towerLevels(TowerType.FLAMETHROWER);
+  const stats = (lvl: number) => {
+    let s = { damage: TOWER_DEFINITIONS[TowerType.FLAMETHROWER].damage!, range: 150, cooldown: TOWER_DEFINITIONS[TowerType.FLAMETHROWER].cooldown! };
+    for (let i = 1; i < lvl; i++) s = applyUpgradeStats('FLAMETHROWER', s);
+    return s;
+  };
+  const matryoshkaHp = ENEMY_STATS[EnemyType.MATRYOSHKA].hp;
+
+  it('cada llama golpea como máximo a 3 enemigos', () => {
+    expect(FLAME_MAX_TARGETS).toBe(3);
+  });
+
+  it('nivel 7: 10 Matrioskas juntas tardan más de 15 s en limpiarse (antes ~1 s con perforación 99)', () => {
+    const s = stats(7);
+    expect(flameSecondsToClear(s.damage, s.cooldown, 10, matryoshkaHp)).toBeGreaterThan(15);
+  });
+
+  it('el Incinerator ya no multiplica su daño por el número de enemigos más allá de 3', () => {
+    const s = stats(7);
+    const t3 = flameSecondsToClear(s.damage, s.cooldown, 3, 1000);
+    const t12 = flameSecondsToClear(s.damage, s.cooldown, 12, 1000);
+    expect(t12 / t3).toBeCloseTo(4, 5); // 4x enemigos => 4x tiempo, no 1x
+  });
+
+  it('DPS nominal de nivel 7 no supera 8x el de nivel 1 (OBJ-3 para esta torre)', () => {
+    expect(flame[6].dps / flame[0].dps).toBeLessThanOrEqual(8);
+  });
+
+  it('DPS por dólar de nivel 7 no supera 3x la mediana (OBJ-1 para esta torre)', () => {
+    const m7 = median(fighters.map(t => towerLevels(t)[6].dpsPer1000));
+    expect(flame[6].dpsPer1000 / m7).toBeLessThanOrEqual(3);
+  });
+
+  it('el DPS real contra un objetivo es menor que el nominal por la pausa entre ráfagas', () => {
+    const s = stats(1);
+    expect(flameRealDps(s.damage, s.cooldown)).toBeLessThan(60 * s.damage / s.cooldown);
   });
 });
