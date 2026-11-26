@@ -131,6 +131,21 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   const towersRef = useRef<Tower[]>([]);
   const projectilesRef = useRef<Projectile[]>([]);
   const groundEffectsRef = useRef<GroundEffect[]>([]); 
+  // Contador de FPS (apagado por defecto; se activa con el botón FPS o la tecla F y se recuerda)
+  const [showFps, setShowFps] = useState<boolean>(() => {
+    try { return localStorage.getItem('wasteland_show_fps') === '1'; } catch { return false; }
+  });
+  const showFpsRef = useRef(showFps);
+  const perfRef = useRef({ frames: 0, updMs: 0, drawMs: 0, last: performance.now() });
+  const [perfStats, setPerfStats] = useState({ fps: 0, upd: 0, draw: 0, enemies: 0, proj: 0 });
+  const toggleFps = () => {
+    setShowFps(v => {
+      const nv = !v;
+      showFpsRef.current = nv;
+      try { localStorage.setItem('wasteland_show_fps', nv ? '1' : '0'); } catch {}
+      return nv;
+    });
+  };
   // Tamaño visible del canvas: cabe en el área de juego manteniendo 4:3 (móvil vertical y horizontal)
   const areaRef = useRef<HTMLDivElement>(null);
   const [canvasFit, setCanvasFit] = useState({ w: 0, h: 0 });
@@ -155,6 +170,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   const statusPopupsRef = useRef<StatusFeedbackPopup[]>([]);
   const lastStatusPopupTimeRef = useRef<Map<string, number>>(new Map());
 
+  const MAX_STATUS_POPUPS = 24;
   const triggerStatusPopup = (
     enemy: Enemy,
     type: 'BURN' | 'BLUEFIRE' | 'FROZEN' | 'SLOWED' | 'POISON' | 'VULNERABLE' | 'SHATTER',
@@ -162,6 +178,8 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     color: string,
     glowColor: string
   ) => {
+    // Tope de avisos a la vez: con cientos de enemigos quemándose, cada aviso es texto + capsula por frame
+    if (statusPopupsRef.current.length >= MAX_STATUS_POPUPS) return;
     const key = `${enemy.id}_${type}`;
     const now = frameRef.current;
     const lastTime = lastStatusPopupTimeRef.current.get(key) || 0;
@@ -778,6 +796,11 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     if (isPaused || gameOver || (victory && !isEndless)) return;
 
     frameRef.current++;
+    if (frameRef.current % 600 === 0) {
+      // El mapa de antirrebote crecía sin límite (una entrada por enemigo y estado)
+      const m = lastStatusPopupTimeRef.current;
+      for (const [k, t] of m) if (frameRef.current - t > 120) m.delete(k);
+    }
     Effects.trackTowerShots(towersRef.current, (type) => soundManager.playShot(type));
     Effects.update();
     
@@ -1983,11 +2006,31 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     if (!ctx) return;
 
     const loop = () => {
+      const t0 = performance.now();
       // Loop multiple times for speed up
       for(let i=0; i<gameSpeed; i++) {
           update();
       }
+      const t1 = performance.now();
       draw(ctx);
+      const t2 = performance.now();
+      // Contador de FPS: se acumula por frame y se publica cada 500 ms (solo si está visible)
+      const f = perfRef.current;
+      f.frames++;
+      f.updMs += t1 - t0;
+      f.drawMs += t2 - t1;
+      if (t2 - f.last >= 500) {
+        if (showFpsRef.current) {
+          setPerfStats({
+            fps: Math.round((f.frames * 1000) / (t2 - f.last)),
+            upd: f.updMs / f.frames,
+            draw: f.drawMs / f.frames,
+            enemies: enemiesRef.current.length,
+            proj: projectilesRef.current.length,
+          });
+        }
+        f.frames = 0; f.updMs = 0; f.drawMs = 0; f.last = t2;
+      }
       requestRef.current = requestAnimationFrame(loop);
     };
     requestRef.current = requestAnimationFrame(loop);
@@ -2001,6 +2044,11 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') {
+        return;
+      }
+
+      if (e.code === 'KeyF' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        toggleFps();
         return;
       }
 
@@ -2214,6 +2262,15 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
             </div>
         )}
 
+        {/* CONTADOR DE FPS (opcional) */}
+        {showFps && (
+            <div className="absolute bottom-1.5 left-1.5 lg:bottom-4 lg:left-4 z-40 pointer-events-none bg-black/70 border border-neutral-600/60 rounded px-2 py-1 font-mono text-[10px] lg:text-xs leading-tight text-neutral-200">
+                <div className={perfStats.fps >= 55 ? 'text-green-400 font-bold' : perfStats.fps >= 30 ? 'text-yellow-400 font-bold' : 'text-red-400 font-bold'}>{perfStats.fps} FPS</div>
+                <div className="text-neutral-400">upd {perfStats.upd.toFixed(1)} ms · draw {perfStats.draw.toFixed(1)} ms</div>
+                <div className="text-neutral-400">enemigos {perfStats.enemies} · proyectiles {perfStats.proj}</div>
+            </div>
+        )}
+
         {/* TOP-RIGHT CONTROLS: DEBRIEF & MENU BUTTON */}
         <div className="absolute top-1.5 right-1.5 lg:top-4 lg:right-4 flex items-center gap-2 z-40">
             {waveSummary && !isSummaryOpen && (
@@ -2229,6 +2286,13 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
                     <span className="hidden sm:inline">Debrief</span>
                 </button>
             )}
+            <button
+                onClick={() => { soundManager.playClick(); toggleFps(); }}
+                className={`border px-2 py-1.5 rounded-lg text-xs font-mono font-bold backdrop-blur-md transition ${showFps ? 'bg-green-900/70 border-green-500/70 text-green-300' : 'bg-neutral-900/90 border-neutral-600 text-neutral-400 hover:text-white'}`}
+                title="Mostrar/ocultar contador de FPS (tecla F)"
+            >
+                FPS
+            </button>
             <button
                 onClick={() => {
                     soundManager.playClick();
