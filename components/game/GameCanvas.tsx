@@ -4,6 +4,7 @@ import { Enemy, Tower, Projectile, GameMap, EnemyType, TowerType, Point, GlobalU
 import { CANVAS_HEIGHT, CANVAS_WIDTH, ENEMY_STATS, TOWER_DEFINITIONS, generateWaves } from '../../config/constants';
 import { Heart, Zap, Crosshair, Play, Pause, LogOut, FastForward, Repeat, ArrowUp, Terminal, Skull, Minimize2, Maximize2, Sword, Infinity as InfinityIcon, BarChart3, CheckCircle2, ShieldAlert, Sliders, X } from 'lucide-react';
 import { Effects } from './Effects';
+import { buildTerrainLayers, TerrainLayers } from './Terrain';
 import { drawTower, drawEnemy, drawProjectile, drawGroundEffect, drawStatusPopups } from './RenderUtils';
 import { PostWaveSummaryModal, WaveSummaryData } from '../ui/PostWaveSummaryModal';
 import { GameMenuModal } from '../ui/GameMenuModal';
@@ -169,6 +170,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
 
   // Visual Refs
   const terrainRef = useRef<TerrainProp[]>([]);
+  const terrainLayersRef = useRef<TerrainLayers | null>(null);
   const fogRef = useRef<FogParticle[]>([]);
   const bgPatternRef = useRef<CanvasPattern | null>(null);
 
@@ -1644,6 +1646,9 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     for(let x=0; x<CANVAS_WIDTH; x+=40) { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x, CANVAS_HEIGHT); ctx.stroke(); }
     for(let y=0; y<CANVAS_HEIGHT; y+=40) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(CANVAS_WIDTH, y); ctx.stroke(); }
 
+    // 2.5 Capa de terreno prerrenderizada (manchas, charcos, sombra del camino)
+    if (terrainLayersRef.current) ctx.drawImage(terrainLayersRef.current.under, 0, 0);
+
     // 3. Floor Props (Under Path)
     terrainRef.current.forEach(prop => {
         if (prop.type === 'SLIME' || prop.type === 'CRACK' || prop.type === 'PLATE') {
@@ -1725,6 +1730,9 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     ctx.stroke();
     ctx.setLineDash([]);
 
+    // 4.5 Grietas, aceite y guijarros sobre el camino
+    if (terrainLayersRef.current) ctx.drawImage(terrainLayersRef.current.over, 0, 0);
+
     // 5. Top Props (Objects that sit on top of ground but below units)
     terrainRef.current.forEach(prop => {
         if (prop.type !== 'SLIME' && prop.type !== 'CRACK' && prop.type !== 'PLATE') {
@@ -1764,6 +1772,11 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     groundEffectsRef.current.forEach(g => drawGroundEffect({ctx, frame: frameRef.current}, g));
 
     // 6. Game Entities
+    // Sombra proyectada de cada torre
+    ctx.save();
+    ctx.fillStyle = 'rgba(0,0,0,0.28)';
+    towersRef.current.forEach(t => { ctx.beginPath(); ctx.ellipse(t.x + 3, t.y + 7, 15, 8, 0, 0, Math.PI * 2); ctx.fill(); });
+    ctx.restore();
     towersRef.current.forEach(t => drawTower({ctx, frame: frameRef.current}, t));
     enemiesRef.current.forEach(e => drawEnemy({ctx, frame: frameRef.current}, e));
     projectilesRef.current.forEach(p => drawProjectile({ctx, frame: frameRef.current}, p, enemiesRef.current));
@@ -1902,6 +1915,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   useEffect(() => {
     Effects.clear();
     Effects.setAtmosphere(CANVAS_WIDTH, CANVAS_HEIGHT, map.id);
+    terrainLayersRef.current = buildTerrainLayers(CANVAS_WIDTH, CANVAS_HEIGHT, map.path, map.id);
     return () => Effects.clear();
   }, [map]);
 
