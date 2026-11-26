@@ -268,7 +268,7 @@ export const ENEMY_STATS: Record<EnemyType, { hp: number; speed: number; reward:
 
   // Healer: 1000 * 1.45 = 1450
   [EnemyType.HEALER]: {
-    hp: 1450, speed: 0.8, reward: 10, color: '#ffffff', radius: 16, damageToPlayer: 15,
+    hp: 1450, speed: 0.7, reward: 10, color: '#ffffff', radius: 16, damageToPlayer: 15,
     isHealer: true
   }
 };
@@ -368,3 +368,9 @@ export const HEALER_HEAL_RADIUS = 200;
 export const HEALER_ZONE_FRAMES = 210;
 export const HEALER_ZONE_TICK_FRAMES = 30;
 export const HEALER_ZONE_TICK_PCT = 0.03;
+// Pulso final al completar el barrido: curación extra (más que un tick normal, no vida completa)
+export const HEALER_BURST_PCT = 0.12;
+export const HEALER_BURST_FRAMES = 24;   // duración del destello visual
+// Anillo visible cada vez que el Healer vivo cura
+export const HEALER_PULSE_FRAMES = 30;
+export const HEALER_FLASH_FRAMES = 24;

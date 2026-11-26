@@ -1,7 +1,7 @@
 
 import { Enemy, Tower, Projectile, EnemyType, TowerType, GroundEffect, StatusFeedbackPopup } from '../../types/index';
 import { Effects } from './Effects';
-import { HEALER_HEAL_RADIUS, HEALER_ZONE_FRAMES } from '../../config/constants';
+import { HEALER_HEAL_RADIUS, HEALER_ZONE_FRAMES, HEALER_PULSE_FRAMES, HEALER_FLASH_FRAMES } from '../../config/constants';
 
 // Helper Types
 interface DrawContext {
@@ -679,8 +679,32 @@ export const drawEnemy = ({ ctx, frame }: DrawContext, enemy: Enemy) => {
         ctx.translate(-x, -y);
     }
 
+    // Destello verde en cualquier enemigo que acaba de recibir curación
+    if (enemy.healFlash && enemy.healFlash > 0) {
+        const t = enemy.healFlash / HEALER_FLASH_FRAMES; // 1 -> 0
+        ctx.beginPath();
+        ctx.arc(x, y, radius + 3 + (1 - t) * 4, 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(74, 222, 128, ${0.9 * t})`;
+        ctx.lineWidth = 2.5;
+        ctx.stroke();
+        // cruz "+" que sube
+        const py = y - radius - 6 - (1 - t) * 14;
+        ctx.fillStyle = `rgba(187, 247, 208, ${t})`;
+        ctx.fillRect(x - 4, py - 1.5, 8, 3);
+        ctx.fillRect(x - 1.5, py - 4, 3, 8);
+    }
+
     // 1. Aura for Healer
     if (enemy.isHealer) {
+        // Anillo que se expande desde el Healer hasta el borde de su radio cada vez que cura
+        if (enemy.healPulse && enemy.healPulse > 0) {
+            const t = 1 - enemy.healPulse / HEALER_PULSE_FRAMES; // 0 -> 1
+            ctx.beginPath();
+            ctx.arc(x, y, 10 + t * (HEALER_HEAL_RADIUS - 10), 0, Math.PI * 2);
+            ctx.strokeStyle = `rgba(134, 239, 172, ${0.8 * (1 - t)})`;
+            ctx.lineWidth = 3;
+            ctx.stroke();
+        }
         ctx.beginPath();
         ctx.arc(x, y, HEALER_HEAL_RADIUS, 0, Math.PI*2);
         ctx.strokeStyle = `rgba(74, 222, 128, ${0.1 + Math.sin(frame * 0.05) * 0.05})`;
@@ -1139,6 +1163,25 @@ export const drawGroundEffect = ({ ctx, frame }: DrawContext, g: GroundEffect) =
         ctx.lineTo(g.x + Math.cos(angle) * g.radius, g.y + Math.sin(angle) * g.radius);
         ctx.strokeStyle = 'rgba(220, 252, 231, 0.95)';
         ctx.lineWidth = 3;
+        ctx.stroke();
+        ctx.restore();
+        return;
+    }
+    if (g.type === 'HEAL_BURST') {
+        // Pulso final: destello verde que se expande por toda el área y se apaga
+        const total = g.maxLifespan || 24;
+        const t = 1 - g.lifespan / total; // 0 -> 1
+        ctx.save();
+        const grd = ctx.createRadialGradient(g.x, g.y, 0, g.x, g.y, g.radius);
+        grd.addColorStop(0, `rgba(240, 253, 244, ${0.85 * (1 - t)})`);
+        grd.addColorStop(0.5, `rgba(74, 222, 128, ${0.5 * (1 - t)})`);
+        grd.addColorStop(1, `rgba(74, 222, 128, ${0.15 * (1 - t)})`);
+        ctx.fillStyle = grd;
+        ctx.beginPath(); ctx.arc(g.x, g.y, g.radius, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath();
+        ctx.arc(g.x, g.y, g.radius * (0.4 + 0.6 * t), 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(220, 252, 231, ${1 - t})`;
+        ctx.lineWidth = 5 * (1 - t) + 1;
         ctx.stroke();
         ctx.restore();
         return;
