@@ -1,7 +1,8 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { GameCanvas } from './components/game/GameCanvas';
-import { UPGRADE_CONFIG } from './config/constants';
+import { UPGRADE_CONFIG, MAPS } from './config/constants';
+import { DailyModifier, getDailyChallenge } from './config/features';
 import { GameMap, PlayerProgress, GlobalUpgrades, Profile, DifficultyLevel } from './types/index';
 import { Zap, User } from 'lucide-react';
 import { Shop } from './components/ui/Shop';
@@ -30,7 +31,7 @@ const INITIAL_PROGRESS: PlayerProgress = {
 };
 
 type ViewState = 'PROFILES' | 'MENU' | 'MAP_SELECT' | 'SHOP' | 'BESTIARY' | 'ACHIEVEMENTS';
-type GameMode = 'STANDARD' | 'ENDLESS';
+type GameMode = 'STANDARD' | 'ENDLESS' | 'DAILY';
 
 function App() {
   // --- STATE ---
@@ -38,6 +39,7 @@ function App() {
   const [selectedDifficulty, setSelectedDifficulty] = useState<DifficultyLevel>('MEDIUM');
   const [view, setView] = useState<ViewState>('PROFILES');
   const [gameMode, setGameMode] = useState<GameMode>('STANDARD');
+  const [dailyModifier, setDailyModifier] = useState<DailyModifier | null>(null);
   
   // Profile System State
   const [profiles, setProfiles] = useState<Profile[]>([]);
@@ -380,6 +382,9 @@ function App() {
             onManualSave={handleManualSave}
             isDevMode={isDevMode}
             initialIsEndless={gameMode === 'ENDLESS'}
+            activeRelic={progress.activeRelic ?? null}
+            onRelicChosen={(id) => setProgress(prev => ({ ...prev, activeRelic: id }))}
+            dailyModifier={gameMode === 'DAILY' ? dailyModifier : null}
         />
         <SaveToast 
           show={showSaveToast} 
@@ -445,7 +450,17 @@ function App() {
 
         {view === 'MENU' && (
             <MainMenu 
-                onNavigate={(v, m) => handleNavigate(v as ViewState, m)}
+                onNavigate={(v, m) => { setDailyModifier(null); handleNavigate(v as ViewState, m); }}
+                onPlayDaily={() => {
+                  const ch = getDailyChallenge(MAPS.map(m => m.id));
+                  const map = MAPS.find(m => m.id === ch.mapId);
+                  if (!map) return;
+                  setGameMode('DAILY');
+                  setDailyModifier(ch.modifier);
+                  setSelectedDifficulty('MEDIUM');
+                  setActiveMap(map);
+                }}
+                dailyLabel={(() => { const ch = getDailyChallenge(MAPS.map(m => m.id)); return `${MAPS.find(m => m.id === ch.mapId)?.name ?? ''} · ${ch.modifier.name}`; })()}
                 isDevMode={isDevMode}
                 onToggleDevMode={() => setIsDevMode(!isDevMode)}
                 soundSettings={soundSettings}
@@ -470,7 +485,7 @@ function App() {
                     setActiveMap(map);
                 }}
                 onBack={() => setView('MENU')}
-                mode={gameMode}
+                mode={gameMode === 'ENDLESS' ? 'ENDLESS' : 'STANDARD'}
             />
         )}
 

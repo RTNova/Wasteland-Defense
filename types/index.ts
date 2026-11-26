@@ -69,6 +69,9 @@ export interface Enemy {
   poisonDoT?: number; // % of Max Health per second (Chemist Lvl 4)
   vulnerable?: number; // Frames vulnerable (+15% dmg)
   armorBroken?: boolean; // Permanent damage increase taken
+  shield?: number; // Escudo de jefe (HP extra, ver config/features.ts)
+  maxShield?: number;
+  shieldFlash?: number; // Frames de destello al romperse
   // Endless Scaling Multipliers
   endlessHpScale?: number; // Wave-based dynamic HP scale
   endlessSpeedScale?: number; // Wave-based dynamic speed scale
@@ -112,6 +115,9 @@ export interface Tower {
 
   // Hunter Specific
   ammo?: number; // Stored arrows from kills
+
+  // Especialización elegida al nivel 3 (config/features.ts)
+  branch?: string;
 }
 
 export interface Projectile {
@@ -190,6 +196,7 @@ export interface PlayerProgress {
   completedMaps: string[];
   completedDifficulties?: string[]; // e.g., ['ruins_EASY', 'ruins_HARD']
   unlockedAchievements?: string[]; // IDs of unlocked milestones
+  activeRelic?: string; // Reliquia activa (config/features.ts)
   stats?: {
     mutantsKilled: number;
     bossesKilled: number;

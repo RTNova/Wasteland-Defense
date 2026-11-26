@@ -6,6 +6,8 @@ import { SoundSettingsPanel } from './SoundSettingsPanel';
 type ViewState = 'MENU' | 'MAP_SELECT' | 'SHOP' | 'BESTIARY' | 'ACHIEVEMENTS' | 'PROFILES';
 
 interface MainMenuProps {
+    onPlayDaily?: () => void;
+    dailyLabel?: string;
     onNavigate: (view: ViewState, mode?: 'STANDARD' | 'ENDLESS') => void;
     isDevMode: boolean;
     onToggleDevMode: () => void;
@@ -20,6 +22,8 @@ interface MainMenuProps {
 
 export const MainMenu: React.FC<MainMenuProps> = ({ 
   onNavigate, 
+  onPlayDaily,
+  dailyLabel,
   isDevMode, 
   onToggleDevMode,
   soundSettings: externalSoundSettings,
@@ -110,6 +114,19 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                     <p className="text-blue-200 text-xs font-bold">Standard Missions</p>
                 </div>
             </button>
+
+            {/* Desafío diario */}
+            {onPlayDaily && (
+                <button
+                    onClick={() => { soundManager.playClick(); onPlayDaily(); }}
+                    className="group relative h-20 bg-gradient-to-r from-amber-900 to-orange-900 rounded-xl border-4 border-amber-600 shadow-[0_0_20px_rgba(217,119,6,0.3)] hover:scale-105 transition-transform overflow-hidden flex items-center px-8"
+                >
+                    <div className="text-left">
+                        <h2 className="text-xl font-black text-white italic uppercase tracking-wider">Desafío diario</h2>
+                        <p className="text-amber-200 text-xs font-bold">{dailyLabel}</p>
+                    </div>
+                </button>
+            )}
 
             {/* Endless Mode Button */}
             <button 

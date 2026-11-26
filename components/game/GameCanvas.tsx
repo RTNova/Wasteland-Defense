@@ -12,6 +12,11 @@ import { soundManager, SoundSettings } from '../../config/soundManager';
 import { getDifficultyConfig } from '../../config/difficulty';
 import { FLAME_MAX_TARGETS, FLAME_BURST_SHOTS, FLAME_BURST_PAUSE_FRAMES, getUpgradeCost, applyUpgradeStats, getWaveHpMultiplier, getRewardMultiplier, getStartingMoney } from '../../config/balance';
 import { getEndlessScaling } from '../../config/endlessScaling';
+import {
+  DamageClass, DailyModifier, AbilityId, ABILITIES, BOMBARD_RADIUS, REPAIR_LIVES, SLOW_FRAMES, BOSS_SHIELD_FRACTION,
+  BRANCH_LEVEL, getDamageClass, resistanceMultiplier, splitShieldDamage, getBranches, getBranch, applyBranchStats,
+  getRelic, rollRelicChoices, bombardDamage, CLASS_LABEL,
+} from '../../config/features';
 
 // --- SUB-COMPONENT: TOWER PREVIEW ---
 const TowerPreview: React.FC<{ type: TowerType }> = ({ type }) => {
@@ -87,6 +92,9 @@ interface GameCanvasProps {
   onManualSave?: () => void;
   isDevMode?: boolean;
   initialIsEndless?: boolean;
+  activeRelic?: string | null;
+  onRelicChosen?: (relicId: string) => void;
+  dailyModifier?: DailyModifier | null;
 }
 
 interface TerrainProp {
@@ -120,7 +128,10 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   onAutoSaveRound,
   onManualSave,
   isDevMode = false, 
-  initialIsEndless = false 
+  initialIsEndless = false,
+  activeRelic = null,
+  onRelicChosen,
+  dailyModifier = null
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const diffConfig = getDifficultyConfig(difficulty);
@@ -198,7 +209,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       vx: (Math.random() - 0.5) * 0.4,
     });
   };
-  const livesRef = useRef<number>(100); 
+  const livesRef = useRef<number>(100 + (getRelic(activeRelic)?.startLives ?? 0)); 
   const frameRef = useRef<number>(0);
   const requestRef = useRef<number>(0);
   const waveActiveRef = useRef<boolean>(false);
@@ -214,16 +225,21 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   const bgPatternRef = useRef<CanvasPattern | null>(null);
 
   // Derived Stats based on upgrades
+  const relic = getRelic(activeRelic);
+  const daily = dailyModifier;
+  const startLives = 100 + (relic?.startLives ?? 0);
   const getTowerStats = (type: TowerType) => {
     const def = TOWER_DEFINITIONS[type];
-    const dmgMult = 1 + (upgrades.damageLevel * 0.1);
-    const rangeMult = 1 + (upgrades.rangeLevel * 0.1);
-    const costMult = Math.max(0.5, 1 - (upgrades.discountLevel * 0.05));
+    const dmgMult = (1 + (upgrades.damageLevel * 0.1)) * (relic?.damageMult ?? 1);
+    const rangeMult = (1 + (upgrades.rangeLevel * 0.1)) * (relic?.rangeMult ?? 1);
+    const costMult = Math.max(0.5, 1 - (upgrades.discountLevel * 0.05)) * (relic?.costMult ?? 1) * (daily?.costMult ?? 1);
+    const cooldown = Math.max(2, (def.cooldown || 60) * (relic?.cooldownMult ?? 1));
     
     // Flamethrower/Shockwave rework: No range upgrades, just damage/fire rate
     if (type === TowerType.FLAMETHROWER || type === TowerType.SHOCKWAVE) {
         return {
             ...def,
+            cooldown,
             damage: Math.round((def.damage || 1) * dmgMult),
             range: def.range || 100, // Fixed range
             cost: Math.floor((def.cost || 100) * costMult)
@@ -232,6 +248,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
 
     return {
       ...def,
+      cooldown,
       damage: Math.round((def.damage || 1) * dmgMult),
       range: (def.range || 100) * rangeMult,
       cost: Math.floor((def.cost || 100) * costMult)
@@ -239,8 +256,8 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   };
 
   // React State for UI
-  const [money, setMoney] = useState(getStartingMoney(upgrades.cashLevel));
-  const [lives, setLives] = useState(100);
+  const [money, setMoney] = useState(getStartingMoney(upgrades.cashLevel) + (relic?.startMoney ?? 0) + (daily?.startMoney ?? 0));
+  const [lives, setLives] = useState(100 + (getRelic(activeRelic)?.startLives ?? 0));
   const [wave, setWave] = useState(1);
   const [gameOver, setGameOver] = useState(false);
   const [victory, setVictory] = useState(false);
@@ -314,6 +331,20 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
 
   // Selection & Dragging State
   const [selectedTowerId, setSelectedTowerId] = useState<string | null>(null);
+
+  // --- v2: habilidades activas, reliquias, refresco de UI ---
+  const [, forceUi] = useState(0);
+  const abilityReadyRef = useRef<Record<AbilityId, number>>({ BOMBARD: 0, REPAIR: 0, SLOW: 0 });
+  const slowUntilRef = useRef(0);
+  const [armedAbility, setArmedAbility] = useState<AbilityId | null>(null);
+  const armedRef = useRef<AbilityId | null>(null);
+  const abilityFnRef = useRef<(id: AbilityId) => void>(() => {});
+  const [relicPicked, setRelicPicked] = useState(false);
+  const relicChoicesRef = useRef<ReturnType<typeof rollRelicChoices> | null>(null);
+  useEffect(() => {
+    const id = setInterval(() => forceUi(n => n + 1), 300);
+    return () => clearInterval(id);
+  }, []);
   const [inGameSoundSettings, setInGameSoundSettings] = useState<SoundSettings>(() => soundManager.getSettings());
   const [dragState, setDragState] = useState<DragState>({
     isDragging: false,
@@ -350,7 +381,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     enemyTypeBreakdown: {} as Record<string, number>,
   });
 
-  const waveStartingLivesRef = useRef<number>(100);
+  const waveStartingLivesRef = useRef<number>(100 + (getRelic(activeRelic)?.startLives ?? 0));
   const totalTechPointsEarnedMatchRef = useRef<number>(0);
   const towerDamageSnapshotRef = useRef<Map<string, number>>(new Map());
 
@@ -539,13 +570,16 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     // Dynamic Endless Mode Health and Speed scaling based on current wave number
     const endlessScaling = getEndlessScaling(waveNum, activeIsEndless);
     const hpMultiplier = baseHpMultiplier * endlessScaling.hpMultiplier;
-    const scaledSpeed = Number((stats.speed * endlessScaling.speedMultiplier).toFixed(2));
+    const scaledSpeed = Number((stats.speed * endlessScaling.speedMultiplier * (daily?.enemySpeedMult ?? 1)).toFixed(2));
 
     const rewardMultiplier = getRewardMultiplier(waveNum, activeIsEndless);
-    const scaledHP = Math.round(stats.hp * hpMultiplier * diffConfig.healthMultiplier);
-    const scaledReward = Math.round(stats.reward * rewardMultiplier);
+    const scaledHP = Math.round(stats.hp * hpMultiplier * diffConfig.healthMultiplier * (daily?.enemyHpMult ?? 1));
+    const scaledReward = Math.round(stats.reward * rewardMultiplier * (relic?.rewardMult ?? 1) * (daily?.rewardMult ?? 1));
+    const shield = type === EnemyType.BOSS ? Math.round(scaledHP * BOSS_SHIELD_FRACTION) : undefined;
 
     enemiesRef.current.push({
+      shield,
+      maxShield: shield,
       id: Math.random().toString(36).substr(2, 9),
       type,
       x: start.x,
@@ -584,11 +618,11 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       const baseHpMultiplier = getWaveHpMultiplier(waveNum);
       const endlessScaling = getEndlessScaling(waveNum, activeIsEndless);
       const hpMultiplier = baseHpMultiplier * endlessScaling.hpMultiplier;
-      const scaledSpeed = Number((stats.speed * endlessScaling.speedMultiplier).toFixed(2));
+      const scaledSpeed = Number((stats.speed * endlessScaling.speedMultiplier * (daily?.enemySpeedMult ?? 1)).toFixed(2));
 
       const rewardMultiplier = getRewardMultiplier(waveNum, activeIsEndless);
-      const scaledHP = Math.round(stats.hp * hpMultiplier * diffConfig.healthMultiplier);
-      const scaledReward = Math.round(stats.reward * rewardMultiplier);
+      const scaledHP = Math.round(stats.hp * hpMultiplier * diffConfig.healthMultiplier * (daily?.enemyHpMult ?? 1));
+      const scaledReward = Math.round(stats.reward * rewardMultiplier * (relic?.rewardMult ?? 1) * (daily?.rewardMult ?? 1));
 
       for(let i=0; i<count; i++) {
           const offset = (Math.random() - 0.5) * 20;
@@ -811,7 +845,10 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       });
   }
 
-  const applyDamage = (enemy: Enemy, amount: number) => {
+  const applyDamage = (enemy: Enemy, amount: number, src?: Tower | DamageClass) => {
+      const srcTower = src && typeof src === 'object' ? src : undefined;
+      const cls: DamageClass | undefined = srcTower ? getDamageClass(srcTower.type) : (src as DamageClass | undefined);
+      const branch = srcTower ? getBranch(srcTower.type, srcTower.branch) : undefined;
       let finalDamage = amount;
       if (enemy.vulnerable && enemy.vulnerable > 0) {
           finalDamage *= 1.15;
@@ -819,7 +856,21 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       if (enemy.armorBroken) {
           finalDamage *= 1.30;
       }
-      enemy.health -= finalDamage;
+      if (!branch?.ignoreResist) finalDamage *= resistanceMultiplier(enemy.type, cls);
+      if (branch?.critChance && Math.random() < branch.critChance) finalDamage *= 2;
+      if (enemy.type === EnemyType.BOSS && relic?.bossDamageMult) finalDamage *= relic.bossDamageMult;
+      let toHealth = finalDamage;
+      if (enemy.shield && enemy.shield > 0) {
+          const r = splitShieldDamage(enemy.shield, finalDamage, cls);
+          enemy.shield = r.shield;
+          toHealth = r.toHealth;
+          if (r.broke) {
+              enemy.shieldFlash = 30;
+              Effects.explosion(enemy.x, enemy.y, '#67e8f9', true);
+              Effects.shake(6);
+          }
+      }
+      enemy.health -= toHealth;
       waveStatsRef.current.damageDealt += finalDamage;
       Effects.damage(enemy.id, enemy.x, enemy.y, finalDamage);
       if (finalDamage >= 5) Effects.hit(enemy.x, enemy.y, '#fbbf24', finalDamage >= 50 ? 4 : 2);
@@ -924,6 +975,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
              currentWaveReward = 600 + (currentWaveIndexRef.current * 20);
           }
           
+          currentWaveReward += relic?.waveBonus ?? 0;
           setMoney(m => m + currentWaveReward);
           waveStatsRef.current.moneyEarned += currentWaveReward;
           waveActiveRef.current = false;
@@ -998,7 +1050,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
             totalBankedTechPoints: (currentTechPoints || 0) + totalTechPointsEarnedMatchRef.current,
 
             currentLives: livesRef.current,
-            maxLives: 100,
+            maxLives: startLives,
             livesLostThisWave,
 
             moneyEarnedWave: waveStatsRef.current.moneyEarned,
@@ -1106,7 +1158,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
                          slowed = true;
                      }
                  }
-                 applyDamage(enemy, ge.damagePerFrame);
+                 applyDamage(enemy, ge.damagePerFrame, ge.type === 'FIRE_POOL' ? 'FIRE' : undefined);
                  if (enemy.health <= 0) {
                      setMoney(m => m + enemy.reward);
                      onEnemyKilled(enemy);
@@ -1114,13 +1166,13 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
              }
           }
       });
-      enemy.slowFactor = slowed ? 0.5 : 1; 
+      enemy.slowFactor = (slowed || frameRef.current < slowUntilRef.current) ? 0.5 : 1; 
 
       if (enemy.burnTimer && enemy.burnTimer > 0) {
           enemy.burnTimer--;
           if (enemy.burnTimer % 30 === 0) {
               const dmg = enemy.burnDamage || 0;
-              applyDamage(enemy, dmg);
+              applyDamage(enemy, dmg, 'FIRE');
               if (enemy.health <= 0) {
                  setMoney(m => m + enemy.reward);
                  onEnemyKilled(enemy);
@@ -1335,7 +1387,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
            }
 
            chain.forEach(e => {
-               applyDamage(e, effectiveDamage);
+               applyDamage(e, effectiveDamage, tower);
                tower.totalDamage += effectiveDamage; // Add Damage Stat
 
                if (tower.level >= 7) {
@@ -1384,7 +1436,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
              
              // AOE Effect
              enemiesInRange.forEach(e => {
-                 applyDamage(e, effectiveDamage);
+                 applyDamage(e, effectiveDamage, tower);
                  tower.totalDamage += effectiveDamage;
                  e.frozen = 30; // 0.5s Stun
                  triggerStatusPopup(e, 'FROZEN', '⚡ STUNNED!', '#67e8f9', '#0284c7');
@@ -1469,7 +1521,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
              enemiesRef.current.forEach(enemy => {
                  const dist = getDistanceToLine({x: enemy.x, y: enemy.y}, {x: tower.x, y: tower.y}, {x: endX, y: endY});
                  if (dist < (enemy.radius + (tower.level >= 7 ? 8 : 5))) { 
-                     applyDamage(enemy, effectiveDamage);
+                     applyDamage(enemy, effectiveDamage, tower);
                      tower.totalDamage += effectiveDamage; // Add Damage Stat
                      
                      if (tower.level >= 7) {
@@ -1576,7 +1628,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
               // Splash Damage
               enemiesRef.current.forEach(e => {
                    if (getDistance(e, {x: p.endX!, y: p.endY!}) <= (p.splashRadius || 80)) {
-                       applyDamage(e, p.damage);
+                       applyDamage(e, p.damage, towersRef.current.find(t => t.id === p.ownerId) || 'EXPLOSIVE');
                        if (p.isExplosive) {
                            e.burnTimer = 120;
                            e.burnDamage = 6;
@@ -1684,7 +1736,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
                 actualDamage += (p.speed * 10); 
             }
 
-            applyDamage(enemy, actualDamage);
+            applyDamage(enemy, actualDamage, towersRef.current.find(t => t.id === p.ownerId));
             p.pierce--;
 
             // TRACK DAMAGE
@@ -1913,6 +1965,37 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     ctx.restore();
     towersRef.current.forEach(t => drawTower({ctx, frame: frameRef.current}, t));
     enemiesRef.current.forEach(e => drawEnemy({ctx, frame: frameRef.current}, e));
+    // Escudo de jefe: anillo cian y barra fina encima de la vida
+    enemiesRef.current.forEach(e => {
+      if (e.health <= 0) return;
+      if (e.shield && e.shield > 0 && e.maxShield) {
+        const pulse = 0.55 + 0.25 * Math.sin(frameRef.current / 8);
+        ctx.save();
+        ctx.strokeStyle = `rgba(103,232,249,${pulse})`;
+        ctx.lineWidth = 3;
+        ctx.shadowColor = '#22d3ee';
+        ctx.shadowBlur = 12;
+        ctx.beginPath();
+        ctx.arc(e.x, e.y, e.radius + 7, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+        const w = 34, frac = Math.max(0, e.shield / e.maxShield);
+        ctx.fillStyle = 'rgba(0,0,0,0.6)';
+        ctx.fillRect(e.x - w / 2, e.y - e.radius - 22, w, 3);
+        ctx.fillStyle = '#22d3ee';
+        ctx.fillRect(e.x - w / 2, e.y - e.radius - 22, w * frac, 3);
+        ctx.restore();
+      } else if (e.shieldFlash && e.shieldFlash > 0) {
+        e.shieldFlash--;
+        ctx.save();
+        ctx.strokeStyle = `rgba(165,243,252,${e.shieldFlash / 30})`;
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.arc(e.x, e.y, e.radius + 7 + (30 - e.shieldFlash), 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      }
+    });
     projectilesRef.current.forEach(p => drawProjectile({ctx, frame: frameRef.current}, p, enemiesRef.current));
 
     // 6.5 Floating Currency Popups (Fade-in, float up, fade-out in vibrant green)
@@ -2124,6 +2207,18 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
         return;
       }
 
+      if (!e.ctrlKey && !e.metaKey && !e.altKey) {
+        if (e.code === 'KeyQ') { abilityFnRef.current('BOMBARD'); return; }
+        if (e.code === 'KeyW') { abilityFnRef.current('REPAIR'); return; }
+        if (e.code === 'KeyE') { abilityFnRef.current('SLOW'); return; }
+      }
+
+      if (e.code === 'Escape' && armedRef.current) {
+        armedRef.current = null;
+        setArmedAbility(null);
+        return;
+      }
+
       if (e.code === 'Escape' || e.code === 'KeyM') {
         if (isSummaryOpen) {
           setIsSummaryOpen(false);
@@ -2283,6 +2378,13 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   const handleCanvasClick = (e: React.MouseEvent) => {
     if (dragState.isDragging) return;
     const { x, y } = getGameCoords(e.clientX, e.clientY);
+    if (armedRef.current === 'BOMBARD') {
+        armedRef.current = null;
+        setArmedAbility(null);
+        abilityReadyRef.current.BOMBARD = frameRef.current + ABILITIES[0].cooldownFrames;
+        fireBombard(x, y);
+        return;
+    }
     const clickedTower = towersRef.current.find(t => getDistance(t, {x, y}) < 25);
     setSelectedTowerId(clickedTower ? clickedTower.id : null);
   };
@@ -2307,6 +2409,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       // This scales linearly but keeps upgrades reasonably priced for their tier
       const upgradeCost = getUpgradeCost(t.cost, t.level);
       
+      if (t.level >= BRANCH_LEVEL && getBranches(t.type) && !t.branch) return; // primero hay que elegir especialización
       if (money >= upgradeCost && t.level < 7) {
           setMoney(m => m - upgradeCost);
           soundManager.playUpgrade();
@@ -2320,6 +2423,59 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       }
   };
 
+  const chooseBranch = (branchId: string) => {
+      const t = towersRef.current.find(x => x.id === selectedTowerId);
+      if (!t || t.branch) return;
+      const b = getBranch(t.type, branchId);
+      if (!b) return;
+      const next = applyBranchStats(b, { damage: t.damage, range: t.range, cooldown: t.cooldown });
+      t.damage = next.damage; t.range = next.range; t.cooldown = next.cooldown;
+      t.branch = b.id;
+      soundManager.playUpgrade();
+      Effects.hit(t.x, t.y, '#a78bfa', 6);
+      forceUi(n => n + 1);
+  };
+
+  const fireBombard = (x: number, y: number) => {
+      const dmg = bombardDamage(wave);
+      Effects.explosion(x, y, '#f97316', true);
+      Effects.shake(7);
+      enemiesRef.current.forEach(e => {
+          if (e.health <= 0) return;
+          if (getDistance(e, { x, y }) <= BOMBARD_RADIUS + e.radius) {
+              applyDamage(e, dmg, 'EXPLOSIVE');
+              if (e.health <= 0) {
+                  setMoney(m => m + e.reward);
+                  onEnemyKilled(e);
+              }
+          }
+      });
+  };
+
+  const triggerAbility = (id: AbilityId) => {
+      if (gameOver || isPaused) return;
+      const def = ABILITIES.find(a => a.id === id)!;
+      if (frameRef.current < abilityReadyRef.current[id]) return;
+      if (id === 'BOMBARD') {
+          const next = armedRef.current === 'BOMBARD' ? null : 'BOMBARD';
+          armedRef.current = next;
+          setArmedAbility(next);
+          if (next) showGameNotification('Bombardeo listo: haz clic en el mapa', 2500);
+          return;
+      }
+      abilityReadyRef.current[id] = frameRef.current + def.cooldownFrames;
+      if (id === 'REPAIR') {
+          livesRef.current = Math.min(startLives, livesRef.current + REPAIR_LIVES);
+          setLives(livesRef.current);
+          showGameNotification(`+${REPAIR_LIVES} vidas`, 1500);
+      } else if (id === 'SLOW') {
+          slowUntilRef.current = frameRef.current + SLOW_FRAMES;
+          showGameNotification('Campo lento activo', 1500);
+      }
+      forceUi(n => n + 1);
+  };
+  abilityFnRef.current = triggerAbility;
+
   return (
     <div className="gc-root flex flex-col lg:flex-row h-[100dvh] w-screen overflow-hidden bg-neutral-900 text-neutral-200 touch-none select-none fixed inset-0">
       
@@ -2331,7 +2487,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
           width={CANVAS_WIDTH}
           height={CANVAS_HEIGHT}
           onClick={handleCanvasClick}
-          className="block shrink-0 bg-neutral-800 shadow-2xl border-2 border-neutral-700 rounded-sm"
+          className={`block shrink-0 bg-neutral-800 shadow-2xl border-2 rounded-sm ${armedAbility ? "border-orange-500 cursor-crosshair" : "border-neutral-700"}`}
           style={{ width: canvasFit.w || undefined, height: canvasFit.h || undefined }}
         />
         </div>
@@ -2359,6 +2515,46 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
                 <div className="text-neutral-400">enemigos {perfStats.enemies} · proyectiles {perfStats.proj}</div>
             </div>
         )}
+
+        {/* RELIQUIA / DESAFÍO ACTIVO */}
+        {(relic || daily) && (
+            <div className="absolute top-12 left-1.5 lg:top-16 lg:left-4 flex flex-col gap-1 pointer-events-none z-30">
+                {relic && (
+                    <div className="bg-neutral-900/85 border border-amber-500/40 rounded px-2 py-0.5 text-[10px] lg:text-xs text-amber-200" title={relic.desc}>
+                        {relic.icon} {relic.name}: {relic.desc}
+                    </div>
+                )}
+                {daily && (
+                    <div className="bg-neutral-900/85 border border-purple-500/50 rounded px-2 py-0.5 text-[10px] lg:text-xs text-purple-200">
+                        Desafío diario: {daily.name}. {daily.desc}
+                    </div>
+                )}
+            </div>
+        )}
+
+        {/* HABILIDADES ACTIVAS */}
+        <div className="absolute bottom-1.5 left-1/2 -translate-x-1/2 lg:bottom-4 flex gap-2 z-30">
+            {ABILITIES.map(a => {
+                const left = Math.max(0, abilityReadyRef.current[a.id] - frameRef.current);
+                const ready = left === 0;
+                const armed = armedAbility === a.id;
+                return (
+                    <button
+                        key={a.id}
+                        onClick={() => triggerAbility(a.id)}
+                        disabled={!ready || gameOver}
+                        title={`${a.desc} [${a.key}]`}
+                        className={`relative px-3 py-1.5 rounded-lg border text-xs font-bold font-mono backdrop-blur-md transition ${
+                            armed ? 'bg-orange-600/80 border-orange-300 text-white animate-pulse'
+                            : ready ? 'bg-neutral-900/90 border-amber-500/60 text-amber-200 hover:bg-neutral-800'
+                            : 'bg-neutral-900/80 border-neutral-700 text-neutral-500 cursor-not-allowed'}`}
+                    >
+                        <span className="opacity-60 mr-1">{a.key}</span>{a.name}
+                        {!ready && <span className="ml-1.5 text-[10px]">{Math.ceil(left / 60)}s</span>}
+                    </button>
+                );
+            })}
+        </div>
 
         {/* TOP-RIGHT CONTROLS: DEBRIEF & MENU BUTTON */}
         <div className="absolute top-1.5 right-1.5 lg:top-4 lg:right-4 flex items-center gap-2 z-40">
@@ -2567,6 +2763,31 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
           />
         )}
 
+        {/* ELEGIR RELIQUIA AL TERMINAR LA PARTIDA */}
+        {(gameOver || victory) && !relicPicked && onRelicChosen && (() => {
+            if (!relicChoicesRef.current) relicChoicesRef.current = rollRelicChoices(Math.random, activeRelic);
+            return (
+                <div className="absolute inset-0 z-[60] bg-black/90 flex items-center justify-center p-4">
+                    <div className="max-w-2xl w-full text-center">
+                        <h3 className="text-2xl font-title text-amber-300 mb-1">Elige una reliquia</h3>
+                        <p className="text-xs text-neutral-400 mb-4">Se activa en tu próxima partida y sustituye a la actual{relic ? ` (${relic.name})` : ''}.</p>
+                        <div className="grid sm:grid-cols-3 gap-3">
+                            {relicChoicesRef.current.map(r => (
+                                <button key={r.id}
+                                    onClick={() => { onRelicChosen(r.id); setRelicPicked(true); }}
+                                    className="p-4 rounded-lg border border-amber-500/50 bg-neutral-900 hover:bg-amber-900/20 transition">
+                                    <div className="text-3xl mb-1">{r.icon}</div>
+                                    <div className="font-bold text-amber-100 text-sm">{r.name}</div>
+                                    <div className="text-xs text-neutral-300 mt-1">{r.desc}</div>
+                                </button>
+                            ))}
+                        </div>
+                        <button onClick={() => setRelicPicked(true)} className="mt-4 text-xs text-neutral-500 hover:text-neutral-300 underline">Omitir</button>
+                    </div>
+                </div>
+            );
+        })()}
+
         {/* DEFEAT MODAL */}
         {gameOver && (
            <div className="absolute inset-0 bg-black/85 flex items-center justify-center z-50 animate-in fade-in backdrop-blur-sm">
@@ -2731,7 +2952,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
                         
                         // Calculate Upgrade Cost
                         const upgradeCost = getUpgradeCost(t.cost, t.level);
-                        const canUpgrade = money >= upgradeCost && t.level < 7;
+                        const canUpgrade = money >= upgradeCost && t.level < 7 && !(t.level >= BRANCH_LEVEL && getBranches(t.type) && !t.branch);
 
                         // Calculate Potential Buffs for Display
                         let bonusDmg = 0;
@@ -2790,6 +3011,40 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
                                         PARALYZED: Cannot Attack
                                     </div>
                                 )}
+
+                                {(() => {
+                                    const branches = getBranches(t.type);
+                                    if (!branches) return null;
+                                    const chosen = getBranch(t.type, t.branch);
+                                    if (chosen) {
+                                        return (
+                                            <div className="mb-2 text-[11px] text-violet-200 bg-violet-900/30 border border-violet-500/40 p-1.5 rounded text-center">
+                                                Especialización: <b>{chosen.name}</b> · {chosen.desc}
+                                            </div>
+                                        );
+                                    }
+                                    if (t.level < BRANCH_LEVEL) {
+                                        return <div className="mb-2 text-[10px] text-neutral-500 text-center">Nivel {BRANCH_LEVEL}: elige una especialización</div>;
+                                    }
+                                    return (
+                                        <div className="mb-2">
+                                            <p className="text-[11px] text-violet-300 font-bold mb-1">Elige especialización (gratis, para seguir mejorando)</p>
+                                            <div className="grid grid-cols-2 gap-2">
+                                                {branches.map(b => (
+                                                    <button key={b.id} onClick={() => chooseBranch(b.id)}
+                                                        className="text-left p-2 rounded border border-violet-500/50 bg-violet-900/20 hover:bg-violet-900/40 transition">
+                                                        <div className="text-xs font-bold text-violet-100">{b.name}</div>
+                                                        <div className="text-[10px] text-neutral-300 leading-tight">{b.desc}</div>
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    );
+                                })()}
+                                {(() => {
+                                    const cls = getDamageClass(t.type);
+                                    return cls ? <div className="mb-2 text-[10px] text-neutral-500">Daño {CLASS_LABEL[cls]}. Tanques resisten cinético, ninjas y magos resisten energía, los jefes tienen escudo que solo rompen bien energía y explosivos.</div> : null;
+                                })()}
 
                                 <div className="flex gap-2">
                                     <button 
