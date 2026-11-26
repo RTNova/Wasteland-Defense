@@ -122,7 +122,10 @@ export const Effects = {
    * Detecta disparos: cuando cooldownTimer sube respecto al frame anterior, la torre acaba de disparar.
    * Llamar una vez por update() con la lista de torres.
    */
-  trackTowerShots(towers: { id: string; type: string; x: number; y: number; rotation: number; cooldownTimer: number }[]) {
+  trackTowerShots(
+    towers: { id: string; type: string; x: number; y: number; rotation: number; cooldownTimer: number }[],
+    onShot?: (towerType: string) => void,
+  ) {
     const alive = new Set<string>();
     for (const t of towers) {
       alive.add(t.id);
@@ -131,6 +134,7 @@ export const Effects = {
       if (prev === undefined || t.cooldownTimer <= prev) continue;
       const cfg = TOWER_FLASH[t.type];
       if (!cfg) continue;
+      if (onShot) onShot(t.type);
       const mx = t.x + Math.cos(t.rotation) * 18;
       const my = t.y + Math.sin(t.rotation) * 18;
       Effects.muzzle(mx, my, t.rotation, cfg.color);
