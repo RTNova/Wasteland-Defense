@@ -25,19 +25,27 @@ import {
 const fighters = allTowerTypes().filter(t => t !== TowerType.RADAR);
 
 describe('fórmulas (config/balance.ts)', () => {
-  it('dinero inicial: 450 + 50 por nivel de Reserves', () => {
-    expect(getStartingMoney(0)).toBe(450);
-    expect(getStartingMoney(4)).toBe(650);
+  it('dinero inicial: 400 + 50 por nivel de Reserves', () => {
+    expect(getStartingMoney(0)).toBe(400);
+    expect(getStartingMoney(4)).toBe(600);
   });
 
-  it('coste de mejora: 60% del coste base + 20% por nivel actual', () => {
-    expect(getUpgradeCost(100, 1)).toBe(80);
-    expect(getUpgradeCost(100, 6)).toBe(180);
-    expect(getUpgradeCost(1400, 3)).toBe(1680);
+  it('coste de mejora: base = 300 + 50% del coste; 60% de la base + 20% por nivel actual', () => {
+    expect(getUpgradeCost(100, 1)).toBe(280); // base 350
+    expect(getUpgradeCost(100, 6)).toBe(630);
+    expect(getUpgradeCost(1400, 3)).toBe(1200); // base 1000
   });
 
-  it('mejora normal: +5% y +30% de daño, +10% de alcance, mismo cooldown', () => {
-    expect(applyUpgradeStats('SURVIVOR', { damage: 40, range: 150, cooldown: 40 })).toEqual({ damage: 54, range: 165, cooldown: 40 });
+  it('mejorar un Scavenger de nivel 1 a 7 cuesta 2730 (antes 780)', () => {
+    let total = 0;
+    for (let l = 1; l < 7; l++) total += getUpgradeCost(100, l);
+    expect(total).toBe(2730);
+  });
+
+  it('mejora normal: +5% y +30% de daño, +10% de alcance, mismo cooldown (Scavenger y Sentry x1.2, Ion Cannon x1.4)', () => {
+    expect(applyUpgradeStats('SNIPER', { damage: 120, range: 330, cooldown: 140 })).toEqual({ damage: 163, range: 363, cooldown: 140 });
+    expect(applyUpgradeStats('SURVIVOR', { damage: 40, range: 150, cooldown: 40 })).toEqual({ damage: 50, range: 165, cooldown: 40 });
+    expect(applyUpgradeStats('LASER', { damage: 300, range: 250, cooldown: 210 })).toEqual({ damage: 441, range: 275, cooldown: 210 });
   });
 
   it('mejora de Incinerator: +5% y +25% de daño, cooldown x0.95 (mínimo 2), sin alcance', () => {
@@ -202,7 +210,7 @@ describe('objetivos de balance', () => {
   const rel7 = (t: TowerType) => towerLevels(t)[6].dpsPer1000 / m7;
   const rel1 = (t: TowerType) => towerLevels(t)[0].dpsPer1000 / m1;
 
-  it.fails('OBJ-1: ninguna torre supera 3x la mediana de DPS por dólar en nivel 7 (hoy Incinerator, Scavenger y Sentry la superan)', () => {
+  it('OBJ-1: ninguna torre supera 3x la mediana de DPS por dólar en nivel 7 (cumplido tras el PR de dificultad)', () => {
     for (const t of fighters) expect(rel7(t), t).toBeLessThanOrEqual(3);
   });
 
@@ -217,7 +225,7 @@ describe('objetivos de balance', () => {
     }
   });
 
-  it.fails('OBJ-4: ninguna torre baja de 0.3x la mediana de DPS por dólar en nivel 7 (hoy Tesla, Ion Cannon y Chemist por debajo; ojo, tienen perforación/cadena/veneno)', () => {
+  it('OBJ-4: ninguna torre baja de 0.3x la mediana de DPS por dólar en nivel 7 (cumplido tras el PR de dificultad)', () => {
     for (const t of fighters) expect(rel7(t), t).toBeGreaterThanOrEqual(0.3);
   });
 
