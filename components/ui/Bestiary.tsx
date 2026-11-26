@@ -88,6 +88,21 @@ const SIM_PATH = [
     { x: 650, y: 100 }
 ];
 
+/** Cómo usar bien cada torre (lo que enseña la demo). */
+const USE_TIPS: Record<string, string> = {
+    SURVIVOR: 'Barata y fiable: ponla junto a una curva para que tenga objetivos más tiempo. Útil al inicio.',
+    SNIPER: 'Alcance largo: ponla lejos del camino, con vista a varios tramos, para golpear a Tanks y Bosses.',
+    TURRET: 'Mucha cadencia a poco alcance: ponla pegada al camino. Es la mejor para recibir el buff del Command Link.',
+    FLAMETHROWER: 'Fuego corto: ponla en una curva cerrada donde pasen juntos. Cada llama golpea hasta 3 enemigos y los quema.',
+    MORTAR: 'Daño en área y lento: ponla detrás, contra grupos. Apunta a donde estará el enemigo.',
+    SHOCKWAVE: 'Pulso que aturde: ponla donde el camino se junta para frenar a todos y que otras torres disparen.',
+    CHEMIST: 'Charcos de ácido que ralentizan: ponlos antes de tus torres de daño para que los enemigos tarden más.',
+    TESLA: 'Rayo en cadena (hasta 4): mejor contra grupos grandes de enemigos débiles.',
+    LASER: 'Rayo que perfora: ponla alineada con un tramo recto para golpear a todos los que estén en línea.',
+    MONK: 'Alcance global, una flecha teledirigida a la vez: ponla donde quieras, ideal contra el enemigo más fuerte.',
+    RADAR: 'No ataca. Ponlo cerca de tus torres de daño (dentro de su alcance) para darles más alcance y, a nivel 7, +15% de daño y velocidad.',
+};
+
 const CombatSimulation: React.FC<{ type: TowerType }> = ({ type }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const reqRef = useRef<number>(0);
@@ -98,6 +113,7 @@ const CombatSimulation: React.FC<{ type: TowerType }> = ({ type }) => {
         projectiles: [] as Projectile[],
         groundEffects: [] as GroundEffect[],
         tower: null as Tower | null,
+        partner: null as Tower | null, // Command Link: torre a la que apoya
         frame: 0,
         spawnTimer: 0
     });
@@ -131,6 +147,18 @@ const CombatSimulation: React.FC<{ type: TowerType }> = ({ type }) => {
             totalDamage: 0
         };
 
+        // Command Link no dispara: apoya a otra torre. Se le pone una Sentry cerca para ver el efecto.
+        simRef.current.partner = null;
+        if (type === TowerType.RADAR) {
+            const pd = TOWER_DEFINITIONS[TowerType.TURRET];
+            simRef.current.partner = {
+                ...simRef.current.tower,
+                id: 'sim-partner', type: TowerType.TURRET, x: 350, y: 195,
+                range: pd.range || 140, damage: pd.damage || 20, cooldown: pd.cooldown || 8,
+                color: pd.color || '#ef4444', isBuffed: false
+            } as Tower;
+        }
+
         simRef.current.enemies = [];
         simRef.current.projectiles = [];
         simRef.current.groundEffects = [];
@@ -140,9 +168,19 @@ const CombatSimulation: React.FC<{ type: TowerType }> = ({ type }) => {
         const update = () => {
             const state = simRef.current;
             state.frame++;
-            const { tower, enemies, projectiles, groundEffects } = state;
-
+            const { enemies, projectiles, groundEffects } = state;
+            // Command Link: la torre que dispara es la Sentry apoyada. El Command Link solo da el buff.
+            const buffOn = type === TowerType.RADAR && Math.floor(state.frame / 420) % 2 === 1;
+            const tower = (type === TowerType.RADAR ? state.partner : state.tower) as Tower | null;
             if (!tower) return;
+            if (type === TowerType.RADAR) {
+                tower.isBuffed = buffOn;
+                // Buff real del juego (Command Link nivel 7): +15% alcance, daño y velocidad
+                const bd = TOWER_DEFINITIONS[TowerType.TURRET];
+                tower.range = (bd.range || 140) * (buffOn ? 1.15 : 1);
+                tower.damage = (bd.damage || 20) * (buffOn ? 1.15 : 1);
+                tower.cooldown = (bd.cooldown || 8) / (buffOn ? 1.15 : 1);
+            }
 
             // 1. SPAWN LOGIC (Tailored to showcase tower)
             if (enemies.length === 0 || (state.spawnTimer > 0 && state.frame % 25 === 0)) {
@@ -152,7 +190,7 @@ const CombatSimulation: React.FC<{ type: TowerType }> = ({ type }) => {
                 let batchSize = 1;
 
                 // Customize scenario based on tower strength
-                if (type === TowerType.TESLA || type === TowerType.FLAMETHROWER || type === TowerType.CHEMIST) {
+                if (type === TowerType.TESLA || type === TowerType.FLAMETHROWER || type === TowerType.CHEMIST || type === TowerType.MORTAR || type === TowerType.SHOCKWAVE) {
                     spawnType = EnemyType.WALKER; // Swarm
                     batchSize = 6;
                 } else if (type === TowerType.SNIPER || type === TowerType.LASER || type === TowerType.MONK) {
@@ -171,7 +209,7 @@ const CombatSimulation: React.FC<{ type: TowerType }> = ({ type }) => {
                     enemies.push({
                         id: Math.random().toString(),
                         type: spawnType,
-                        x: start.x - 20, 
+                        x: start.x + 110 - (state.spawnTimer * 12), 
                         y: start.y + (Math.random() - 0.5) * 10, 
                         health: stats.hp * 4, // Boost HP for demo duration
                         maxHealth: stats.hp * 4,
@@ -195,6 +233,7 @@ const CombatSimulation: React.FC<{ type: TowerType }> = ({ type }) => {
                 // Apply Ground Effects
                 let slowed = false;
                 groundEffects.forEach(g => {
+                    if (g.type !== 'ACID_POOL') return; // solo el ácido ralentiza; el pulso y el fuego son visuales
                     const dist = Math.hypot(e.x - g.x, e.y - g.y);
                     if(dist < e.radius + g.radius) {
                         slowed = true;
@@ -210,6 +249,9 @@ const CombatSimulation: React.FC<{ type: TowerType }> = ({ type }) => {
                         e.health -= (e.burnDamage || 0);
                     }
                 }
+
+                // Aturdimiento (Pulverizer): no se mueve
+                if (e.frozen && e.frozen > 0) { e.frozen--; return; }
 
                 // Simple Path Following (Similar to GameCanvas)
                 const targetNode = SIM_PATH[e.pathIndex + 1];
@@ -300,7 +342,7 @@ const CombatSimulation: React.FC<{ type: TowerType }> = ({ type }) => {
                          x: tower.x, y: tower.y, targetId: target.id,
                          velocity: { x: Math.cos(randomizedAngle) * 5, y: Math.sin(randomizedAngle) * 5 }, 
                          speed: 5, damage: tower.damage, color: '#ff5500', // Orange
-                         radius: 5, pierce: 99, lifespan: 30, hitIds: []
+                         radius: 5, pierce: 3, lifespan: 30, hitIds: []
                     });
 
                 } else if (type === TowerType.CHEMIST) {
@@ -338,6 +380,33 @@ const CombatSimulation: React.FC<{ type: TowerType }> = ({ type }) => {
                         radius: 3, pierce: 1, lifespan: 60
                     });
 
+                } else if (type === TowerType.SHOCKWAVE) {
+                    // Pulso en área: daña y aturde 0,5 s a todo lo que esté en alcance (como en el juego)
+                    tower.cooldownTimer = tower.cooldown;
+                    inRange.forEach(e => { e.health -= tower.damage; e.frozen = 30; });
+                    groundEffects.push({
+                        id: Math.random().toString(), type: 'SHOCKWAVE', x: tower.x, y: tower.y,
+                        radius: tower.range, lifespan: 15, damagePerFrame: 0, slowFactor: 0
+                    });
+
+                } else if (type === TowerType.MORTAR) {
+                    // Obús al punto donde estará el enemigo, daño en área al caer
+                    tower.cooldownTimer = tower.cooldown;
+                    const speed = 4;
+                    const travel = Math.hypot(target.x - tower.x, target.y - tower.y) / speed;
+                    const nextNode = SIM_PATH[target.pathIndex + 1];
+                    let px = target.x, py = target.y;
+                    if (nextNode) {
+                        const dx = nextNode.x - target.x, dy = nextNode.y - target.y;
+                        const d = Math.hypot(dx, dy) || 1;
+                        px += (dx / d) * target.speed * travel; py += (dy / d) * target.speed * travel;
+                    }
+                    projectiles.push({
+                        id: Math.random().toString(), ownerId: tower.id, x: tower.x, y: tower.y, targetId: null,
+                        endX: px, endY: py, velocity: { x: 0, y: 0 }, speed, damage: tower.damage,
+                        color: '#71717a', radius: 6, type: 'MORTAR_SHELL', pierce: 0, lifespan: 120, splashRadius: 70
+                    });
+
                 } else {
                     // Generic
                     tower.cooldownTimer = tower.cooldown;
@@ -368,6 +437,23 @@ const CombatSimulation: React.FC<{ type: TowerType }> = ({ type }) => {
                 }
                 
                 if (p.type === 'BEAM' || p.type === 'LIGHTNING') continue;
+
+                if (p.type === 'MORTAR_SHELL' && p.endX !== undefined && p.endY !== undefined) {
+                    const dx = p.endX - p.x, dy = p.endY - p.y;
+                    const d = Math.hypot(dx, dy);
+                    if (d < p.speed) {
+                        const r = p.splashRadius || 70;
+                        groundEffects.push({
+                            id: Math.random().toString(), type: 'FIRE_POOL', x: p.endX, y: p.endY,
+                            radius: r, lifespan: 15, damagePerFrame: 0, slowFactor: 0
+                        });
+                        enemies.forEach(e => { if (Math.hypot(e.x - p.endX!, e.y - p.endY!) <= r) e.health -= p.damage; });
+                        projectiles.splice(i, 1);
+                    } else {
+                        p.x += (dx / d) * p.speed; p.y += (dy / d) * p.speed;
+                    }
+                    continue;
+                }
 
                 // CHEMIST LOGIC
                 if (p.type === 'GLUE_BOMB' && p.endX) {
@@ -508,6 +594,34 @@ const CombatSimulation: React.FC<{ type: TowerType }> = ({ type }) => {
                 ctx.setLineDash([]);
             }
 
+            // Command Link: torre apoyada, rayos de buff y cartel
+            const partner = simRef.current.partner;
+            if (partner && simRef.current.tower) {
+                const radar = simRef.current.tower;
+                const on = !!partner.isBuffed;
+                drawTower(context, partner);
+                ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+                ctx.setLineDash([5,5]);
+                ctx.beginPath(); ctx.arc(partner.x, partner.y, partner.range, 0, Math.PI*2); ctx.stroke();
+                ctx.setLineDash([]);
+                if (on) {
+                    const pulse = 0.5 + 0.5 * Math.sin(simRef.current.frame / 8);
+                    ctx.strokeStyle = `rgba(56,189,248,${0.5 + pulse * 0.4})`;
+                    ctx.lineWidth = 2;
+                    ctx.setLineDash([6, 4]);
+                    ctx.beginPath(); ctx.moveTo(radar.x, radar.y); ctx.lineTo(partner.x, partner.y); ctx.stroke();
+                    ctx.setLineDash([]);
+                    ctx.beginPath(); ctx.arc(partner.x, partner.y, 22 + pulse * 4, 0, Math.PI*2); ctx.stroke();
+                }
+                ctx.font = 'bold 14px monospace';
+                ctx.textAlign = 'left';
+                ctx.fillStyle = on ? '#38bdf8' : '#a3a3a3';
+                ctx.fillText(on ? 'BUFF ACTIVO: +15% daño, velocidad y alcance' : 'SIN BUFF (Sentry sola)', 12, 24);
+                ctx.fillStyle = '#737373';
+                ctx.font = '12px monospace';
+                ctx.fillText('El Command Link no dispara: potencia a las torres cercanas', 12, 44);
+            }
+
             // Draw Enemies
             simRef.current.enemies.forEach(e => drawEnemy(context, e));
 
@@ -515,17 +629,25 @@ const CombatSimulation: React.FC<{ type: TowerType }> = ({ type }) => {
             simRef.current.projectiles.forEach(p => drawProjectile(context, p, simRef.current.enemies));
         };
 
-        const loop = () => {
-            update();
+        // Paso fijo de 60 actualizaciones por segundo, igual en cualquier monitor (antes iba un paso por fotograma)
+        const STEP_MS = 1000 / 60;
+        let last = performance.now();
+        let acc = 0;
+        const loop = (now: number) => {
+            acc += Math.min(now - last, 250);
+            last = now;
+            let steps = 0;
+            while (acc >= STEP_MS && steps < 5) { update(); acc -= STEP_MS; steps++; }
+            if (steps === 5) acc = 0;
             draw();
             reqRef.current = requestAnimationFrame(loop);
         };
-        loop();
+        reqRef.current = requestAnimationFrame(loop);
 
         return () => cancelAnimationFrame(reqRef.current);
     }, [type]);
 
-    return <canvas ref={canvasRef} width={600} height={300} className="w-full h-64 bg-black rounded border border-neutral-700 mb-4 shadow-inner" />;
+    return <canvas ref={canvasRef} width={600} height={300} className="w-full aspect-[2/1] bg-black rounded border border-neutral-700 mb-4 shadow-inner" />;
 };
 
 // --- MAIN COMPONENT ---
@@ -678,6 +800,11 @@ export const Bestiary: React.FC<BestiaryProps> = ({ onBack }) => {
                                 <>
                                     {/* THE REAL SIMULATION */}
                                     <CombatSimulation type={selectedItem.type} />
+                                    {USE_TIPS[selectedItem.type] && (
+                                        <p className="text-xs text-emerald-300 bg-emerald-900/20 border border-emerald-800/50 rounded p-2 mb-3">
+                                            <strong>Uso correcto:</strong> {USE_TIPS[selectedItem.type]}
+                                        </p>
+                                    )}
 
                                     <p className="text-sm text-neutral-300 italic mb-4 border-l-2 border-blue-500 pl-3">
                                         {selectedItem.stats.description}
