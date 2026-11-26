@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
 import { 
   ArrowRight, ChevronLeft, Infinity as InfinityIcon, 
-  ShieldAlert, Zap, Skull, CheckCircle2, 
-  Swords
+  ShieldAlert, Zap, Skull, CheckCircle2
 } from 'lucide-react';
 import { MAPS } from '../../config/constants';
 import { GameMap, PlayerProgress, DifficultyLevel } from '../../types/index';
@@ -69,53 +68,6 @@ export const MapSelection: React.FC<MapSelectionProps> = ({
             <span>Back to Command</span>
         </button>
 
-        {/* Header and Global Difficulty Selector */}
-        <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-6 mb-8 border-b border-neutral-800 pb-6">
-            <div>
-              <div className="flex items-center gap-3 mb-1">
-                <h2 className="text-3xl sm:text-4xl font-title text-white tracking-wider">
-                    {mode === 'ENDLESS' ? 'ENDLESS OPERATIONS' : 'DEPLOYMENT ZONES'}
-                </h2>
-                {mode === 'ENDLESS' && (
-                    <span className="text-indigo-400 text-xs sm:text-sm font-bold flex items-center gap-1 bg-indigo-950/60 border border-indigo-500/40 px-2.5 py-1 rounded-full">
-                        <InfinityIcon className="w-4 h-4" /> Infinite Waves
-                    </span>
-                )}
-              </div>
-              <p className="text-xs sm:text-sm text-neutral-400">
-                Select combat theater and mission difficulty multipliers before deployment.
-              </p>
-            </div>
-
-            {/* Global Difficulty Quick Preset */}
-            <div className="bg-neutral-900 border border-neutral-800 p-2 sm:p-2.5 rounded-xl flex flex-col sm:flex-row sm:items-center gap-3">
-              <span className="text-xs font-bold text-neutral-400 flex items-center gap-1.5 uppercase tracking-wider px-1">
-                <Swords className="w-4 h-4 text-neutral-500" />
-                Difficulty Preset:
-              </span>
-              <div className="grid grid-cols-3 gap-1.5 bg-neutral-950 p-1 rounded-lg border border-neutral-800/80">
-                {(['EASY', 'MEDIUM', 'HARD'] as DifficultyLevel[]).map((d) => {
-                  const cfg = DIFFICULTY_CONFIGS[d];
-                  const isActive = globalDifficulty === d;
-                  return (
-                    <button
-                      key={d}
-                      onClick={() => handleGlobalDifficultyChange(d)}
-                      className={`px-3 py-1.5 rounded text-xs font-bold transition flex items-center justify-center gap-1.5 ${
-                        isActive
-                          ? `${cfg.badgeBg} ${cfg.badgeText} border ${cfg.badgeBorder} shadow-sm`
-                          : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/50'
-                      }`}
-                    >
-                      <span>{cfg.name}</span>
-                      <span className="text-[10px] opacity-75 font-mono">({cfg.healthMultiplier}x)</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-        </div>
-
         {/* Global Multiplier Summary Banner */}
         <div className="mb-6 grid grid-cols-1 sm:grid-cols-3 gap-3">
           {(['EASY', 'MEDIUM', 'HARD'] as DifficultyLevel[]).map((d) => {
@@ -152,6 +104,26 @@ export const MapSelection: React.FC<MapSelectionProps> = ({
               </div>
             );
           })}
+        </div>
+
+        {/* Header (titulo) */}
+        <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-6 mb-8 border-t border-neutral-800 pt-6">
+            <div>
+              <div className="flex items-center gap-3 mb-1">
+                <h2 className="text-3xl sm:text-4xl font-title text-white tracking-wider">
+                    {mode === 'ENDLESS' ? 'ENDLESS OPERATIONS' : 'DEPLOYMENT ZONES'}
+                </h2>
+                {mode === 'ENDLESS' && (
+                    <span className="text-indigo-400 text-xs sm:text-sm font-bold flex items-center gap-1 bg-indigo-950/60 border border-indigo-500/40 px-2.5 py-1 rounded-full">
+                        <InfinityIcon className="w-4 h-4" /> Infinite Waves
+                    </span>
+                )}
+              </div>
+              <p className="text-xs sm:text-sm text-neutral-400">
+                Select combat theater and mission difficulty multipliers before deployment.
+              </p>
+            </div>
+
         </div>
 
         {/* Map Cards Grid */}

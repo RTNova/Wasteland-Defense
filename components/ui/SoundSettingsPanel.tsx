@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { Volume2, VolumeX, Music, Bell, BellOff, Disc, Sparkles, Sliders } from 'lucide-react';
 import { soundManager, SoundSettings } from '../../config/soundManager';
 
@@ -16,6 +16,14 @@ export const SoundSettingsPanel: React.FC<SoundSettingsPanelProps> = ({
   onOpenFullMenu
 }) => {
   const [showCompactPopover, setShowCompactPopover] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const [popPos, setPopPos] = useState({ top: 0, left: 8 });
+  // El desplegable va en posición fija para que ningún contenedor con overflow lo recorte
+  const togglePopover = () => {
+    const r = wrapRef.current?.getBoundingClientRect();
+    if (r) setPopPos({ top: r.bottom + 8, left: Math.max(8, Math.min(r.right - 256, window.innerWidth - 256 - 8)) });
+    setShowCompactPopover(prev => !prev);
+  };
 
   const toggleAll = () => {
     const isAnyUnmuted = !settings.musicMuted || !settings.sfxMuted;
@@ -48,7 +56,7 @@ export const SoundSettingsPanel: React.FC<SoundSettingsPanelProps> = ({
 
   if (variant === 'compact') {
     return (
-      <div className="relative">
+      <div className="relative" ref={wrapRef}>
         <div className="flex items-center gap-1.5 bg-neutral-900/90 border border-neutral-800 p-1.5 rounded-lg shadow-lg">
           <button
             onClick={toggleAll}
@@ -91,7 +99,7 @@ export const SoundSettingsPanel: React.FC<SoundSettingsPanelProps> = ({
               if (onOpenFullMenu) {
                 onOpenFullMenu();
               } else {
-                setShowCompactPopover(prev => !prev);
+                togglePopover();
               }
             }}
             className="p-1.5 rounded bg-neutral-800/80 hover:bg-neutral-700 text-neutral-400 hover:text-white transition"
@@ -104,7 +112,8 @@ export const SoundSettingsPanel: React.FC<SoundSettingsPanelProps> = ({
         {/* Compact Dropdown Popover with Volume Sliders */}
         {showCompactPopover && !onOpenFullMenu && (
           <div 
-            className="absolute top-full right-0 mt-2 w-64 bg-neutral-900 border border-neutral-700 rounded-xl p-3 shadow-2xl z-50 animate-in fade-in zoom-in-95 text-xs font-mono"
+            style={{ position: 'fixed', top: popPos.top, left: popPos.left }}
+            className="w-64 max-w-[calc(100vw-16px)] bg-neutral-900 border border-neutral-700 rounded-xl p-3 shadow-2xl z-50 animate-in fade-in zoom-in-95 text-xs font-mono"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between pb-2 border-b border-neutral-800 mb-2">
