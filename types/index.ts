@@ -150,7 +150,7 @@ export interface GroundEffect {
   radius: number;
   lifespan: number;
   maxLifespan?: number; // For progress animations (charging)
-  type: 'ACID_POOL' | 'DELAYED_HEAL' | 'FIRE_POOL' | 'SHOCKWAVE';
+  type: 'ACID_POOL' | 'DELAYED_HEAL' | 'HEAL_ZONE' | 'FIRE_POOL' | 'SHOCKWAVE';
   damagePerFrame: number;
   healAmount?: number; // For delayed heal
   slowFactor: number; // 0.5 means 50% speed

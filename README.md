@@ -95,7 +95,7 @@ Esto es un proyecto aún en desarrollo, por lo que todavía no cumple ni con mis
 | **Tank** | Bloqueo | Mucha vida; **al morir genera 3 Walkers** |
 | **Boss** | Hito de oleada | Vida alta; **al morir genera 3 Tanks** |
 | **Matryoshka** | Élite | La cadena de generación definitiva: **al morir genera 3 Boss**, que a su vez generan Tanks, que generan Walkers |
-| **Healer** | Soporte enemigo | Cura en área a otros enemigos periódicamente y hace un **heal-burst** al morir |
+| **Healer** | Soporte enemigo | Cura en área a otros enemigos periódicamente y deja una **zona de curación de 3,5 s con barrido tipo radar** al morir |
 
 ---
 
