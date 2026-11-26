@@ -595,7 +595,7 @@ export const Bestiary: React.FC<BestiaryProps> = ({ onBack }) => {
                         return (
                             <div 
                                 key={type}
-                                onClick={() => setSelectedItem({ type, category: 'ENEMY', stats, name: type })}
+                                onClick={() => setSelectedItem({ type, category: 'ENEMY', stats, name: type.replace(/_/g, ' ') })}
                                 className={`group relative aspect-[3/4] bg-[#1e2a3b] rounded-xl border-b-4 active:border-b-0 active:translate-y-1 transition-all cursor-pointer shadow-lg overflow-hidden ${rarityColor.split(' ')[0]}`}
                             >
                                 {/* Card Background Glow */}
@@ -609,7 +609,7 @@ export const Bestiary: React.FC<BestiaryProps> = ({ onBack }) => {
                                 {/* Name Label */}
                                 <div className="absolute bottom-0 left-0 right-0 bg-[#111827] py-2 px-1 border-t border-white/10">
                                     <div className="text-center text-[10px] sm:text-xs font-bold text-white uppercase truncate">
-                                        {type}
+                                        {type.replace(/_/g, ' ')}
                                     </div>
                                 </div>
                                 
