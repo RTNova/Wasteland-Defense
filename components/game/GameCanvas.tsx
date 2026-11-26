@@ -3,6 +3,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Enemy, Tower, Projectile, GameMap, EnemyType, TowerType, Point, GlobalUpgrades, DragState, GroundEffect, CurrencyPopup, StatusFeedbackPopup, DifficultyLevel } from '../../types/index';
 import { CANVAS_HEIGHT, CANVAS_WIDTH, ENEMY_STATS, TOWER_DEFINITIONS, generateWaves } from '../../config/constants';
 import { Heart, Zap, Crosshair, Play, Pause, LogOut, FastForward, Repeat, ArrowUp, Terminal, Skull, Minimize2, Maximize2, Sword, Infinity as InfinityIcon, BarChart3, CheckCircle2, ShieldAlert, Sliders, X } from 'lucide-react';
+import { Effects } from './Effects';
 import { drawTower, drawEnemy, drawProjectile, drawGroundEffect, drawStatusPopups } from './RenderUtils';
 import { PostWaveSummaryModal, WaveSummaryData } from '../ui/PostWaveSummaryModal';
 import { GameMenuModal } from '../ui/GameMenuModal';
@@ -708,6 +709,9 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   }
 
   const handleEnemyDeath = (enemy: Enemy) => {
+      const isBoss = enemy.type === EnemyType.BOSS;
+      Effects.explosion(enemy.x, enemy.y, isBoss ? '#ef4444' : '#f97316', isBoss);
+      if (isBoss) Effects.shake(9);
       if (enemy.onDeathSpawn) {
           spawnMinions(enemy, enemy.onDeathSpawn.type, enemy.onDeathSpawn.count);
       }
@@ -743,6 +747,8 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       }
       enemy.health -= finalDamage;
       waveStatsRef.current.damageDealt += finalDamage;
+      Effects.damage(enemy.id, enemy.x, enemy.y, finalDamage);
+      if (finalDamage >= 5) Effects.hit(enemy.x, enemy.y, '#fbbf24', finalDamage >= 50 ? 4 : 2);
       return finalDamage;
   }
 
@@ -750,6 +756,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     if (isPaused || gameOver || (victory && !isEndless)) return;
 
     frameRef.current++;
+    Effects.update();
     
     fogRef.current.forEach(p => {
       p.x += p.speed;
@@ -1621,6 +1628,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   };
 
   const draw = (ctx: CanvasRenderingContext2D) => {
+    Effects.beginShake(ctx);
     // 1. Base Background with Texture
     if (bgPatternRef.current) {
        ctx.fillStyle = bgPatternRef.current;
@@ -1812,6 +1820,10 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
         drawStatusPopups({ ctx }, statusPopupsRef.current);
     }
 
+    // 6.7 Partículas y números de daño
+    Effects.drawParticles(ctx);
+    Effects.drawDamageNumbers(ctx);
+
     // 7. Drifting Fog Layer
     fogRef.current.forEach(f => {
         ctx.fillStyle = map.id === 'wasteland' ? `rgba(100, 255, 100, ${f.alpha})` : `rgba(200, 200, 200, ${f.alpha})`;
@@ -1880,7 +1892,14 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
         }
       }
     }
+    Effects.endShake(ctx);
   };
+
+  // Limpiar efectos al cambiar de mapa o salir
+  useEffect(() => {
+    Effects.clear();
+    return () => Effects.clear();
+  }, [map]);
 
   // Game Loop Effect
   useEffect(() => {
