@@ -9,7 +9,6 @@ import { drawTower, drawEnemy, drawProjectile, drawGroundEffect, drawStatusPopup
 import { PostWaveSummaryModal, WaveSummaryData } from '../ui/PostWaveSummaryModal';
 import { GameMenuModal } from '../ui/GameMenuModal';
 import { soundManager, SoundSettings } from '../../config/soundManager';
-import { SoundSettingsPanel } from '../ui/SoundSettingsPanel';
 import { getDifficultyConfig } from '../../config/difficulty';
 import { FLAME_MAX_TARGETS, FLAME_BURST_SHOTS, FLAME_BURST_PAUSE_FRAMES, getUpgradeCost, applyUpgradeStats, getWaveHpMultiplier, getRewardMultiplier, getStartingMoney } from '../../config/balance';
 import { getEndlessScaling } from '../../config/endlessScaling';
@@ -2636,32 +2635,6 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
 
         <div className="hidden lg:flex items-center justify-between p-3.5 border-b border-neutral-700 bg-neutral-900">
             <h1 className="text-lg font-title text-neutral-400 tracking-wider">COMMAND CENTER</h1>
-            <div className="flex items-center gap-2">
-                <button
-                    onClick={() => {
-                        soundManager.playClick();
-                        setIsMenuOpen(true);
-                        setIsPaused(true);
-                    }}
-                    className="flex items-center gap-1.5 px-2.5 py-1 bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 text-neutral-300 hover:text-white rounded text-xs font-bold transition"
-                    title="Menu & Audio Settings (ESC)"
-                >
-                    <Sliders className="w-3.5 h-3.5 text-amber-400" />
-                    <span>Menu</span>
-                </button>
-                <SoundSettingsPanel 
-                    settings={inGameSoundSettings} 
-                    onUpdateSettings={(newS) => {
-                        const saved = soundManager.saveSettings(newS);
-                        setInGameSoundSettings(saved);
-                    }} 
-                    variant="compact"
-                    onOpenFullMenu={() => {
-                        setIsMenuOpen(true);
-                        setIsPaused(true);
-                    }}
-                />
-            </div>
         </div>
 
         <div className="gc-ctrl p-2 lg:p-4 grid grid-cols-2 gap-2 border-b border-neutral-800 bg-neutral-800">
