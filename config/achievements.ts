@@ -6,7 +6,7 @@ export interface Achievement {
   targetValue: number;
   rewardTP: number;
   iconName: string; // Lucide icon identifier
-  getValue: (stats: PlayerProgressStats, progress: { techPoints: number; completedMaps: string[]; upgrades: any }) => number;
+  getValue: (stats: PlayerProgressStats, progress: { techPoints: number; completedMaps: string[]; upgrades: any; skillNodes?: string[] }) => number;
 }
 
 export interface PlayerProgressStats {
@@ -148,7 +148,7 @@ export const ACHIEVEMENTS: Achievement[] = [
     iconName: 'ArrowUpCircle',
     getValue: (_, progress) => {
       const u = progress.upgrades || {};
-      return (u.damageLevel || 0) + (u.rangeLevel || 0) + (u.discountLevel || 0) + (u.cashLevel || 0);
+      return (u.damageLevel || 0) + (u.rangeLevel || 0) + (u.discountLevel || 0) + (u.cashLevel || 0) + (progress.skillNodes?.length || 0);
     },
   },
 ];

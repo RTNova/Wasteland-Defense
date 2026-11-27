@@ -11,6 +11,7 @@ import { GameMenuModal } from '../ui/GameMenuModal';
 import { soundManager, SoundSettings } from '../../config/soundManager';
 import { getDifficultyConfig } from '../../config/difficulty';
 import { FLAME_MAX_TARGETS, FLAME_BURST_SHOTS, FLAME_BURST_PAUSE_FRAMES, getUpgradeCost, applyUpgradeStats, getWaveHpMultiplier, getRewardMultiplier, getStartingMoney } from '../../config/balance';
+import { getArmoryEffects } from '../../config/skillTree';
 import { getEndlessScaling } from '../../config/endlessScaling';
 import {
   DamageClass, DailyModifier, AbilityId, ABILITIES, BOMBARD_RADIUS, REPAIR_LIVES, SLOW_FRAMES, BOSS_SHIELD_FRACTION,
@@ -82,6 +83,7 @@ const RangeArcIcon = () => (
 interface GameCanvasProps {
   map: GameMap;
   upgrades: GlobalUpgrades;
+  skillNodes?: string[];
   currentTechPoints?: number;
   difficulty?: DifficultyLevel;
   onExit: () => void;
@@ -119,6 +121,7 @@ interface FogParticle {
 export const GameCanvas: React.FC<GameCanvasProps> = ({ 
   map, 
   upgrades, 
+  skillNodes = [],
   currentTechPoints = 0,
   difficulty = 'MEDIUM',
   onExit, 
@@ -224,16 +227,17 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   const fogRef = useRef<FogParticle[]>([]);
   const bgPatternRef = useRef<CanvasPattern | null>(null);
 
-  // Derived Stats based on upgrades
+  // Derived Stats based on upgrades (legacy levels + Armory skill tree)
   const relic = getRelic(activeRelic);
   const daily = dailyModifier;
+  const armory = getArmoryEffects(upgrades, skillNodes);
   const startLives = 100 + (relic?.startLives ?? 0);
   const getTowerStats = (type: TowerType) => {
     const def = TOWER_DEFINITIONS[type];
-    const dmgMult = (1 + (upgrades.damageLevel * 0.1)) * (relic?.damageMult ?? 1);
-    const rangeMult = (1 + (upgrades.rangeLevel * 0.1)) * (relic?.rangeMult ?? 1);
-    const costMult = Math.max(0.5, 1 - (upgrades.discountLevel * 0.05)) * (relic?.costMult ?? 1) * (daily?.costMult ?? 1);
-    const cooldown = Math.max(2, (def.cooldown || 60) * (relic?.cooldownMult ?? 1));
+    const dmgMult = armory.damageMult * (relic?.damageMult ?? 1);
+    const rangeMult = armory.rangeMult * (relic?.rangeMult ?? 1);
+    const costMult = Math.max(0.5, 1 - armory.costReduction) * (relic?.costMult ?? 1) * (daily?.costMult ?? 1);
+    const cooldown = Math.max(2, (def.cooldown || 60) * armory.cooldownMult * (relic?.cooldownMult ?? 1));
     
     // Flamethrower/Shockwave rework: No range upgrades, just damage/fire rate
     if (type === TowerType.FLAMETHROWER || type === TowerType.SHOCKWAVE) {
@@ -256,7 +260,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   };
 
   // React State for UI
-  const [money, setMoney] = useState(getStartingMoney(upgrades.cashLevel) + (relic?.startMoney ?? 0) + (daily?.startMoney ?? 0));
+  const [money, setMoney] = useState(getStartingMoney(upgrades.cashLevel) + armory.startingCash + (relic?.startMoney ?? 0) + (daily?.startMoney ?? 0));
   const [lives, setLives] = useState(100 + (getRelic(activeRelic)?.startLives ?? 0));
   const [wave, setWave] = useState(1);
   const [gameOver, setGameOver] = useState(false);
@@ -1565,14 +1569,14 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
         } 
         else {
             tower.cooldownTimer = effectiveCooldown;
-            const speed = 8;
+            const speed = 8 * armory.projectileSpeedMult;
             projectilesRef.current.push({
               id: Math.random().toString(), ownerId: tower.id, x: tower.x, y: tower.y,
               targetId: (tower.type === TowerType.SNIPER || tower.isBuffed) ? target.id : null,
               velocity: { x: Math.cos(angle) * speed, y: Math.sin(angle) * speed },
               speed: speed, damage: effectiveDamage,
               color: tower.type === TowerType.TURRET && tower.level >= 7 && (tower.rampUpMultiplier||1) > 1.2 ? '#ef4444' : '#ffff00',
-              radius: 3, type: 'BULLET', pierce: tower.type === TowerType.SNIPER && tower.level >= 7 ? 3 : 1, lifespan: 60,
+              radius: 3, type: 'BULLET', pierce: (tower.type === TowerType.SNIPER && tower.level >= 7 ? 3 : 1) + armory.bulletPierce, lifespan: 60,
               isExplosive: tower.type === TowerType.SURVIVOR && tower.level >= 7,
               isHoming: tower.isBuffed 
             });
@@ -2193,7 +2197,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     return () => {
       if (requestRef.current) cancelAnimationFrame(requestRef.current);
     };
-  }, [gameOver, victory, map, dragState, selectedTowerId, upgrades, gameSpeed, isEndless, isPaused]); 
+  }, [gameOver, victory, map, dragState, selectedTowerId, upgrades, skillNodes, gameSpeed, isEndless, isPaused]); 
 
   // --- KEYBOARD SHORTCUTS: ESC / M for Menu ---
   useEffect(() => {

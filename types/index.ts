@@ -193,6 +193,7 @@ export interface GlobalUpgrades {
 export interface PlayerProgress {
   techPoints: number; // Meta currency
   upgrades: GlobalUpgrades;
+  skillNodes?: string[]; // Purchased Armory skill-tree node IDs (config/skillTree.ts)
   completedMaps: string[];
   completedDifficulties?: string[]; // e.g., ['ruins_EASY', 'ruins_HARD']
   unlockedAchievements?: string[]; // IDs of unlocked milestones
