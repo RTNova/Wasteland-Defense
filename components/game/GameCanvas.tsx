@@ -2518,15 +2518,15 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
 
         {/* RELIQUIA / DESAFÍO ACTIVO */}
         {(relic || daily) && (
-            <div className="absolute top-12 left-1.5 lg:top-16 lg:left-4 flex flex-col gap-1 pointer-events-none z-30">
+            <div className="absolute bottom-[4.25rem] lg:bottom-16 left-1.5 right-1.5 lg:left-4 lg:right-auto lg:max-w-md flex flex-col gap-1 pointer-events-none z-30">
                 {relic && (
-                    <div className="bg-neutral-900/85 border border-amber-500/40 rounded px-2 py-0.5 text-[10px] lg:text-xs text-amber-200" title={relic.desc}>
+                    <div className="bg-neutral-900/85 border border-amber-500/40 rounded px-2 py-0.5 text-[10px] lg:text-xs text-amber-200 truncate" title={relic.desc}>
                         {relic.icon} {relic.name}: {relic.desc}
                     </div>
                 )}
                 {daily && (
-                    <div className="bg-neutral-900/85 border border-purple-500/50 rounded px-2 py-0.5 text-[10px] lg:text-xs text-purple-200">
-                        Desafío diario: {daily.name}. {daily.desc}
+                    <div className="bg-neutral-900/85 border border-purple-500/50 rounded px-2 py-0.5 text-[10px] lg:text-xs text-purple-200 truncate" title={daily.desc}>
+                        Diario · {daily.name}: {daily.desc}
                     </div>
                 )}
             </div>
@@ -2544,13 +2544,13 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
                         onClick={() => triggerAbility(a.id)}
                         disabled={!ready || gameOver}
                         title={`${a.desc} [${a.key}]`}
-                        className={`relative px-3 py-1.5 rounded-lg border text-xs font-bold font-mono backdrop-blur-md transition ${
+                        className={`relative min-w-[6.5rem] whitespace-nowrap text-center px-2 py-1.5 rounded-lg border text-[11px] sm:text-xs font-bold font-mono tabular-nums backdrop-blur-md transition ${
                             armed ? 'bg-orange-600/80 border-orange-300 text-white animate-pulse'
                             : ready ? 'bg-neutral-900/90 border-amber-500/60 text-amber-200 hover:bg-neutral-800'
                             : 'bg-neutral-900/80 border-neutral-700 text-neutral-500 cursor-not-allowed'}`}
                     >
                         <span className="opacity-60 mr-1">{a.key}</span>{a.name}
-                        {!ready && <span className="ml-1.5 text-[10px]">{Math.ceil(left / 60)}s</span>}
+                        {!ready && <span className="ml-1 text-[10px]">{Math.ceil(left / 60)}s</span>}
                     </button>
                 );
             })}
@@ -2584,11 +2584,11 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
                     setIsMenuOpen(true);
                     setIsPaused(true);
                 }}
-                className="bg-neutral-900/90 hover:bg-neutral-800 border border-blue-500/60 hover:border-blue-400 text-neutral-100 hover:text-white px-3.5 py-1.5 rounded-lg flex items-center gap-2 text-xs font-mono font-bold shadow-xl backdrop-blur-md transition group"
+                className="bg-neutral-900/90 hover:bg-neutral-800 border border-blue-500/60 hover:border-blue-400 text-neutral-100 hover:text-white px-2 sm:px-3.5 py-1.5 rounded-lg flex items-center gap-2 text-xs font-mono font-bold shadow-xl backdrop-blur-md transition group"
                 title="Open Tactical Menu & Sound Settings (ESC or M)"
             >
                 <Sliders className="w-3.5 h-3.5 text-amber-400 group-hover:rotate-45 transition-transform" />
-                <span>MENU</span>
+                <span className="hidden sm:inline">MENU</span>
             </button>
         </div>
 
@@ -2643,7 +2643,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
         )}
         
         {/* Floating UI Stats */}
-        <div className="gc-hud absolute top-1.5 left-1.5 lg:top-4 lg:left-4 max-w-[calc(100%-5.5rem)] lg:max-w-none flex flex-wrap gap-1 lg:gap-3 pointer-events-none">
+        <div className="gc-hud absolute top-1.5 left-1.5 lg:top-4 lg:left-4 max-w-[calc(100%-9rem)] lg:max-w-none flex flex-wrap gap-1 lg:gap-3 pointer-events-none">
             <div className="bg-neutral-900/90 border border-yellow-600/50 px-2 lg:px-3 py-0.5 lg:py-1 rounded flex items-center gap-2 text-yellow-500 font-bold text-xs lg:text-base shadow-lg backdrop-blur-sm">
                 <Zap className="w-4 h-4" />
                 <span>${money}</span>
@@ -2968,7 +2968,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
                             <>
                                 <div className="flex justify-between items-start mb-2">
                                     <div>
-                                        <h3 className="font-bold text-white text-sm">{t.name} <span className="text-yellow-500 text-xs">LVL {t.level}</span></h3>
+                                        <h3 className="font-bold text-white text-sm">{t.name} <span className="text-yellow-500 text-xs">LVL {t.level}</span>{getDamageClass(t.type) && <span className="ml-2 text-[10px] font-normal text-neutral-400" title="Tanques resisten cinético; ninjas y magos resisten energía; los jefes tienen escudo que solo rompen bien energía y explosivos.">daño {CLASS_LABEL[getDamageClass(t.type)!]}</span>}</h3>
                                     </div>
                                     <button onClick={() => setSelectedTowerId(null)} className="text-neutral-500 hover:text-white text-sm">Close</button>
                                 </div>
@@ -3023,9 +3023,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
                                             </div>
                                         );
                                     }
-                                    if (t.level < BRANCH_LEVEL) {
-                                        return <div className="mb-2 text-[10px] text-neutral-500 text-center">Nivel {BRANCH_LEVEL}: elige una especialización</div>;
-                                    }
+                                    if (t.level < BRANCH_LEVEL) return null;
                                     return (
                                         <div className="mb-2">
                                             <p className="text-[11px] text-violet-300 font-bold mb-1">Elige especialización (gratis, para seguir mejorando)</p>
@@ -3041,12 +3039,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
                                         </div>
                                     );
                                 })()}
-                                {(() => {
-                                    const cls = getDamageClass(t.type);
-                                    return cls ? <div className="mb-2 text-[10px] text-neutral-500">Daño {CLASS_LABEL[cls]}. Tanques resisten cinético, ninjas y magos resisten energía, los jefes tienen escudo que solo rompen bien energía y explosivos.</div> : null;
-                                })()}
-
-                                <div className="flex gap-2">
+                                <div className="flex gap-2 sticky bottom-0 bg-neutral-900 pt-1">
                                     <button 
                                         onClick={upgradeSelectedTower}
                                         disabled={!canUpgrade && t.level < 7}
