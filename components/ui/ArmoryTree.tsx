@@ -64,7 +64,7 @@ export const ArmoryTree: React.FC<ArmoryTreeProps> = ({ progress, onBuyNode, onB
     if (rect.width === 0) return;
     initializedRef.current = true;
     const fit = Math.min(rect.width, rect.height) / 1500;
-    const k = Math.min(0.95, Math.max(0.3, fit));
+    const k = Math.min(0.95, Math.max(0.35, fit));
     setView({ x: rect.width / 2, y: rect.height / 2 - 30, k });
   }, []);
 
@@ -87,7 +87,8 @@ export const ArmoryTree: React.FC<ArmoryTreeProps> = ({ progress, onBuyNode, onB
   };
 
   const handlePointerDown = (e: React.PointerEvent) => {
-    containerRef.current?.setPointerCapture(e.pointerId);
+    // No setPointerCapture here: capturing on the container would retarget the
+    // pointerup and swallow click events on the node <g> elements.
     pointersRef.current.set(e.pointerId, getPos(e));
     suppressClickRef.current = false;
     if (pointersRef.current.size === 2) {
@@ -153,7 +154,7 @@ export const ArmoryTree: React.FC<ArmoryTreeProps> = ({ progress, onBuyNode, onB
   const canAfford = selected ? progress.techPoints >= selected.cost : false;
 
   return (
-    <main className="fixed inset-0 bg-neutral-950 overflow-hidden select-none">
+    <main className="fixed inset-0 z-40 bg-neutral-950 overflow-hidden select-none">
       {/* Header */}
       <div className="absolute top-0 inset-x-0 z-20 flex items-center justify-between p-3 sm:p-4 pointer-events-none">
         <button
