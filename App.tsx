@@ -1,11 +1,12 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { GameCanvas } from './components/game/GameCanvas';
-import { UPGRADE_CONFIG, MAPS } from './config/constants';
+import { MAPS } from './config/constants';
 import { DailyModifier, getDailyChallenge } from './config/features';
-import { GameMap, PlayerProgress, GlobalUpgrades, Profile, DifficultyLevel } from './types/index';
+import { GameMap, PlayerProgress, Profile, DifficultyLevel } from './types/index';
 import { Zap, User } from 'lucide-react';
-import { Shop } from './components/ui/Shop';
+import { ArmoryTree } from './components/ui/ArmoryTree';
+import { SKILL_NODE_MAP } from './config/skillTree';
 import { MainMenu } from './components/ui/MainMenu';
 import { MapSelection } from './components/ui/MapSelection';
 import { Bestiary } from './components/ui/Bestiary';
@@ -25,6 +26,7 @@ const INITIAL_PROGRESS: PlayerProgress = {
     discountLevel: 0,
     cashLevel: 0
   },
+  skillNodes: [],
   completedMaps: [],
   unlockedAchievements: [],
   stats: { ...INITIAL_PROGRESS_STATS }
@@ -341,25 +343,21 @@ function App() {
     });
   }, []);
 
-  const buyUpgrade = (key: keyof GlobalUpgrades) => {
-    const config = UPGRADE_CONFIG[key as keyof typeof UPGRADE_CONFIG];
-    if (!config) return;
+  const buySkillNode = (nodeId: string) => {
+    const node = SKILL_NODE_MAP[nodeId];
+    if (!node) return;
 
-    // Basic cost scaling: Base Cost * (Level + 1)
-    const currentLevel = progress.upgrades[key];
-    const cost = config.cost * (currentLevel + 1);
+    const purchased = progress.skillNodes ?? [];
+    if (purchased.includes(nodeId)) return;
+    if (node.parent !== null && !purchased.includes(node.parent)) return;
+    if (progress.techPoints < node.cost) return;
 
-    if (progress.techPoints >= cost) {
-      setProgress(prev => ({
-        ...prev,
-        techPoints: prev.techPoints - cost,
-        upgrades: {
-          ...prev.upgrades,
-          [key]: prev.upgrades[key] + 1
-        }
-      }));
-      triggerSaveNotification('Upgrade Installed • Progress Saved');
-    }
+    setProgress(prev => ({
+      ...prev,
+      techPoints: prev.techPoints - node.cost,
+      skillNodes: [...(prev.skillNodes ?? []), nodeId]
+    }));
+    triggerSaveNotification('Upgrade Installed • Progress Saved');
   };
 
   // --- RENDER ---
@@ -372,6 +370,7 @@ function App() {
         <GameCanvas 
             map={activeMap} 
             upgrades={progress.upgrades}
+            skillNodes={progress.skillNodes ?? []}
             currentTechPoints={progress.techPoints}
             difficulty={selectedDifficulty}
             onExit={() => setActiveMap(null)} 
@@ -490,9 +489,9 @@ function App() {
         )}
 
         {view === 'SHOP' && (
-            <Shop 
+            <ArmoryTree 
                 progress={progress} 
-                onBuyUpgrade={buyUpgrade} 
+                onBuyNode={buySkillNode} 
                 onBack={() => setView('MENU')} 
             />
         )}
