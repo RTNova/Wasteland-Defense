@@ -206,7 +206,8 @@ export const Effects = {
   },
 
   /**
-   * Registra daño recibido por un enemigo. Acumula y muestra un número cada ~10 frames por enemigo.
+   * Registra daño recibido por un enemigo. Acumula y muestra un número cada ~16 frames por enemigo
+   * (antes 10): menos números a la vez y más legibles, sobre todo para quien empieza.
    */
   damage(id: string, x: number, y: number, amount: number) {
     if (amount < 1) return;
@@ -250,7 +251,7 @@ export const Effects = {
         n.size = val >= 100 ? 15 : val >= 30 ? 13 : 11;
         n.color = val >= 100 ? '#f87171' : val >= 30 ? '#fbbf24' : '#e5e7eb';
         n.active = true;
-        d.amount = 0; d.cooldown = 10;
+        d.amount = 0; d.cooldown = 16;
       }
     });
     if (pendingDamage.size > 400) pendingDamage.clear(); // seguridad contra fugas

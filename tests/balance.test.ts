@@ -15,7 +15,7 @@ import { TOWER_DEFINITIONS, ENEMY_STATS, MAPS, generateWaves, CANVAS_WIDTH, CANV
 import { getEndlessScaling } from '../config/endlessScaling';
 import { DIFFICULTY_CONFIGS } from '../config/difficulty';
 import {
-  applyUpgradeStats, FLAME_MAX_TARGETS, flameSecondsToClear, flameRealDps, getUpgradeCost, getWaveHpMultiplier, getRewardMultiplier, getStartingMoney, TOWER_MAX_LEVEL,
+  applyUpgradeStats, FLAME_MAX_TARGETS, flameSecondsToClear, flameRealDps, getUpgradeCost, getWaveHpMultiplier, getRewardMultiplier, getStartingMoney, TOWER_MAX_LEVEL, GAME_PACE,
 } from '../config/balance';
 import { EnemyType, TowerType } from '../types/index';
 import {
@@ -72,6 +72,11 @@ describe('fórmulas (config/balance.ts)', () => {
 
   it('multiplicador de recompensa: Endless paga más que campaña desde la oleada 1', () => {
     for (const w of [1, 10, 30]) expect(getRewardMultiplier(w, true)).toBeGreaterThan(getRewardMultiplier(w, false));
+  });
+
+  it('ritmo base: más lento que el original pero sin pasarse (0,5 a 1)', () => {
+    expect(GAME_PACE).toBeGreaterThanOrEqual(0.5);
+    expect(GAME_PACE).toBeLessThanOrEqual(1);
   });
 });
 
