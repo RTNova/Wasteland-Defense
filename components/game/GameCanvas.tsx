@@ -10,7 +10,7 @@ import { PostWaveSummaryModal, WaveSummaryData } from '../ui/PostWaveSummaryModa
 import { GameMenuModal } from '../ui/GameMenuModal';
 import { soundManager, SoundSettings } from '../../config/soundManager';
 import { getDifficultyConfig } from '../../config/difficulty';
-import { FLAME_MAX_TARGETS, FLAME_BURST_SHOTS, FLAME_BURST_PAUSE_FRAMES, getUpgradeCost, applyUpgradeStats, getWaveHpMultiplier, getRewardMultiplier, getStartingMoney } from '../../config/balance';
+import { FLAME_MAX_TARGETS, FLAME_BURST_SHOTS, FLAME_BURST_PAUSE_FRAMES, getUpgradeCost, applyUpgradeStats, getWaveHpMultiplier, getRewardMultiplier, getStartingMoney, GAME_PACE } from '../../config/balance';
 import { getEndlessScaling } from '../../config/endlessScaling';
 import {
   DamageClass, DailyModifier, AbilityId, ABILITIES, BOMBARD_RADIUS, REPAIR_LIVES, SLOW_FRAMES, BOSS_SHIELD_FRACTION,
@@ -211,6 +211,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   };
   const livesRef = useRef<number>(100 + (getRelic(activeRelic)?.startLives ?? 0)); 
   const frameRef = useRef<number>(0);
+  const paceAccRef = useRef<number>(0); // pasos de simulación fraccionados acumulados (GAME_PACE)
   const requestRef = useRef<number>(0);
   const waveActiveRef = useRef<boolean>(false);
   const currentWaveIndexRef = useRef<number>(0);
@@ -2162,8 +2163,12 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
 
     const loop = () => {
       const t0 = performance.now();
-      // Loop multiple times for speed up
-      for(let i=0; i<gameSpeed; i++) {
+      // Ritmo: GAME_PACE frena la simulación (pasos fraccionados acumulados) y el botón
+      // de velocidad la multiplica. Así el juego va más lento sin tocar el balance.
+      paceAccRef.current += gameSpeed * GAME_PACE;
+      const steps = Math.min(4, Math.floor(paceAccRef.current));
+      paceAccRef.current -= steps;
+      for(let i=0; i<steps; i++) {
           update();
       }
       const t1 = performance.now();

@@ -238,3 +238,15 @@ Efecto (MEDIUM, estático): vida total oleada 1: 816 a 1122; oleada 3: 1533 a 23
 DPS por 1000$ invertidos en nivel 7 (Scavenger / Sentry / Ion Cannon): 411 / 395 / 28 a 81 / 129 / 99. OBJ-1 y OBJ-4 pasan ahora.
 
 No medido: partida completa en móvil con varias estrategias. Solo hay una prueba corta de bot (Scavenger solo, 95 s) que ya pierde vidas en la oleada 2-3. Valores a ajustar tras jugarlo.
+
+## Ritmo más lento y menos ruido de números (PR feat/ritmo-lento)
+
+Motivo: el juego funciona, pero para un jugador nuevo todo ocurre demasiado rápido: las torres disparan muy seguido, el daño cae muy rápido y la pantalla se llena de números y avisos que aportan más ruido que información.
+
+| Qué | Antes | Ahora |
+|---|---|---|
+| Ritmo base | 60 pasos de simulación por segundo | `GAME_PACE = 0,8`: 48 pasos por segundo. Todo va un 20% más lento (enemigos, disparos, oleadas, quemaduras, avisos) sin cambiar el balance: cada torre hace el mismo daño por metro recorrido |
+| Botón de velocidad | 1x / 2x sobre el ritmo original | 1x / 2x sobre el ritmo nuevo (o sea, 0,8x / 1,6x del original) |
+| Números de daño | Uno por enemigo cada ~10 frames | Uno por enemigo cada ~16 frames, sumando lo acumulado |
+
+Ajuste fino: subir o bajar `GAME_PACE` en `config/balance.ts` tras jugarlo en el móvil.

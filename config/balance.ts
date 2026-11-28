@@ -11,6 +11,14 @@ export const STARTING_LIVES = 100;
 export const BASE_STARTING_MONEY = 400;
 export const FRAMES_PER_SECOND = 60;
 
+/**
+ * Ritmo base del juego: fracción de pasos de simulación por frame real. 1 = ritmo original.
+ * Con 0,8 todo ocurre un 20% más despacio (enemigos, disparos, oleadas, quemaduras y números),
+ * así que el balance no cambia: cada torre dispara las mismas veces por metro recorrido.
+ * El botón de velocidad (1x/2x) multiplica encima de este ritmo.
+ */
+export const GAME_PACE = 0.8;
+
 /** Dinero inicial: 450 + 50 por nivel de "Reserves". */
 export const getStartingMoney = (cashLevel: number): number => BASE_STARTING_MONEY + cashLevel * 50;
 
