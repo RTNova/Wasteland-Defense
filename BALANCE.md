@@ -238,3 +238,17 @@ Efecto (MEDIUM, estático): vida total oleada 1: 816 a 1122; oleada 3: 1533 a 23
 DPS por 1000$ invertidos en nivel 7 (Scavenger / Sentry / Ion Cannon): 411 / 395 / 28 a 81 / 129 / 99. OBJ-1 y OBJ-4 pasan ahora.
 
 No medido: partida completa en móvil con varias estrategias. Solo hay una prueba corta de bot (Scavenger solo, 95 s) que ya pierde vidas en la oleada 2-3. Valores a ajustar tras jugarlo.
+
+## Alcance real de las torres (PR fix/alcance-real)
+
+Motivo: las mejoras de alcance no siempre se traducían en alcance real. La vida de cada proyectil era fija, así que a niveles altos la torre apuntaba a enemigos más lejos de lo que sus proyectiles podían recorrer. El caso más visible: el Incinerator con la rama "Alcance largo" marcaba +25% de alcance, pero las llamas siempre recorrían 150 px.
+
+| Qué | Antes | Ahora |
+|---|---|---|
+| Incinerator | Llamas clavadas en 150 px (30 frames x 5) aunque el alcance subiera | Las llamas viven lo necesario para cubrir el alcance real y el cono se abre más: dispersión 0,4 a 0,7 rad y radio 5 a 6,5 px |
+| Balas (Scavenger, Ranger, Sentry) | Vida fija 60 frames = 480 px; el Ranger en L7 (581) y con Command Link (668) no llegaba | Vida = alcance / velocidad + 5 frames de margen |
+| Chemist (bomba) | 360 px fijos | Igual |
+| Earthshaker (obús) | 480 px fijos | Igual |
+| Tests | Sin cobertura | Invariante nuevo: toda torre de fuego directo alcanza su alcance máximo (L7 + rama + buff de Command Link) |
+
+Sin tocar: el rayo del Ion Cannon ya golpea a todo enemigo en su línea hasta 1000 px fijos, más allá de su alcance marcado. Pendiente decidir si se recorta al círculo o se deja como perforación extra.

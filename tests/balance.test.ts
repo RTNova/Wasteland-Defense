@@ -16,7 +16,9 @@ import { getEndlessScaling } from '../config/endlessScaling';
 import { DIFFICULTY_CONFIGS } from '../config/difficulty';
 import {
   applyUpgradeStats, FLAME_MAX_TARGETS, flameSecondsToClear, flameRealDps, getUpgradeCost, getWaveHpMultiplier, getRewardMultiplier, getStartingMoney, TOWER_MAX_LEVEL,
+  getTravelLifespan, getFlameSpread, getFlameRadius,
 } from '../config/balance';
+import { getBranches } from '../config/features';
 import { EnemyType, TowerType } from '../types/index';
 import {
   allTowerTypes, towerLevels, median, effectiveEnemy, waveTable, cumulativeMoney,
@@ -72,6 +74,46 @@ describe('fórmulas (config/balance.ts)', () => {
 
   it('multiplicador de recompensa: Endless paga más que campaña desde la oleada 1', () => {
     for (const w of [1, 10, 30]) expect(getRewardMultiplier(w, true)).toBeGreaterThan(getRewardMultiplier(w, false));
+  });
+});
+
+describe('alcance real de los proyectiles', () => {
+  it('la vida del proyectil cubre el alcance de su torre (+5 frames de margen)', () => {
+    expect(getTravelLifespan(150, 5, 30)).toBe(35); // Incinerator base
+    expect(getTravelLifespan(581, 8, 60)).toBe(78); // Ranger L7: antes la bala moría a los 480 px
+    expect(getTravelLifespan(140, 8, 60)).toBe(60); // alcance corto: se queda en el mínimo
+    expect(getTravelLifespan(330, 8, 60)).toBe(60); // Ranger L1: 330/8+5 = 47 -> mínimo 60
+  });
+
+  it('el cono del Incinerator se abre al ganar alcance y el radio de la llama crece', () => {
+    expect(getFlameSpread(150)).toBeCloseTo(0.4); // alcance base: como antes
+    expect(getFlameSpread(187)).toBeGreaterThan(0.4); // rama "Alcance largo"
+    expect(getFlameSpread(9999)).toBeCloseTo(0.7); // tope
+    expect(getFlameRadius(150)).toBeCloseTo(5);
+    expect(getFlameRadius(300)).toBeCloseTo(6.5);
+  });
+
+  it('toda torre de fuego directo alcanza su alcance máximo real (L7 + rama + buff de Command Link)', () => {
+    // Velocidad y vida mínima de cada proyectil tal y como las usa GameCanvas al crearlos.
+    const proyectiles: Partial<Record<TowerType, { speed: number; minLife: number }>> = {
+      [TowerType.SURVIVOR]: { speed: 8, minLife: 60 },
+      [TowerType.SNIPER]: { speed: 8, minLife: 60 },
+      [TowerType.TURRET]: { speed: 8, minLife: 60 },
+      [TowerType.CHEMIST]: { speed: 6, minLife: 60 },
+      [TowerType.MORTAR]: { speed: 4, minLife: 120 },
+      [TowerType.FLAMETHROWER]: { speed: 5, minLife: 30 },
+    };
+    for (const [t, p] of Object.entries(proyectiles)) {
+      const def = TOWER_DEFINITIONS[t as TowerType];
+      let range = def.range!;
+      if (t !== TowerType.FLAMETHROWER) {
+        for (let l = 1; l < TOWER_MAX_LEVEL; l++) range = Math.floor(range * 1.1); // +10% por nivel
+      }
+      const maxBranchRange = Math.max(1, ...(getBranches(t)?.map(b => b.rangeMult ?? 1) ?? [1]));
+      const maxRange = range * maxBranchRange * 1.15; // buff de Command Link
+      const reach = getTravelLifespan(maxRange, p.speed, p.minLife) * p.speed;
+      expect(reach, `${t}: alcance ${Math.round(maxRange)} > recorrido ${Math.round(reach)}`).toBeGreaterThanOrEqual(maxRange);
+    }
   });
 });
 

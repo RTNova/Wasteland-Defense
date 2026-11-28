@@ -10,7 +10,7 @@ import { PostWaveSummaryModal, WaveSummaryData } from '../ui/PostWaveSummaryModa
 import { GameMenuModal } from '../ui/GameMenuModal';
 import { soundManager, SoundSettings } from '../../config/soundManager';
 import { getDifficultyConfig } from '../../config/difficulty';
-import { FLAME_MAX_TARGETS, FLAME_BURST_SHOTS, FLAME_BURST_PAUSE_FRAMES, getUpgradeCost, applyUpgradeStats, getWaveHpMultiplier, getRewardMultiplier, getStartingMoney } from '../../config/balance';
+import { FLAME_MAX_TARGETS, FLAME_BURST_SHOTS, FLAME_BURST_PAUSE_FRAMES, getUpgradeCost, applyUpgradeStats, getWaveHpMultiplier, getRewardMultiplier, getStartingMoney, getTravelLifespan, getFlameSpread, getFlameRadius } from '../../config/balance';
 import { getEndlessScaling } from '../../config/endlessScaling';
 import {
   DamageClass, DailyModifier, AbilityId, ABILITIES, BOMBARD_RADIUS, REPAIR_LIVES, SLOW_FRAMES, BOSS_SHIELD_FRACTION,
@@ -1409,8 +1409,11 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
         else if (tower.type === TowerType.FLAMETHROWER) {
             if (tower.burstCount === undefined) tower.burstCount = 0;
             tower.cooldownTimer = effectiveCooldown;
-            const spread = 0.4; 
+            // El cono cubre el alcance real: las llamas viven lo que tardan en recorrerlo
+            // y se abren más cuanto mayor es (rama "Alcance largo", buff del Command Link).
+            const spread = getFlameSpread(effectiveRange);
             const randomizedAngle = angle + (Math.random() * spread - spread/2);
+            const flameLife = getTravelLifespan(effectiveRange, 5, 30);
 
             // Healing Reduction Scaling
             const healRed = Math.min(0.9, 0.3 + ((tower.level - 1) * 0.1));
@@ -1418,12 +1421,12 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
             projectilesRef.current.push({
                  id: Math.random().toString(), ownerId: tower.id, // Track owner for damage
                  x: tower.x, y: tower.y, targetId: null,
-                 velocity: { x: Math.cos(randomizedAngle) * 5, y: Math.sin(randomizedAngle) * 5 }, 
+                 velocity: { x: Math.cos(randomizedAngle) * 5, y: Math.sin(randomizedAngle) * 5 },
                  speed: 5, damage: effectiveDamage,
                  color: tower.level >= 7 ? '#3b82f6' : '#ff5500',
-                 radius: 5, type: 'FLAME', pierce: FLAME_MAX_TARGETS, lifespan: 30, hitIds: [], 
+                 radius: getFlameRadius(effectiveRange), type: 'FLAME', pierce: FLAME_MAX_TARGETS, lifespan: flameLife, maxLifespan: flameLife, hitIds: [],
                  isBlueFire: tower.level >= 7,
-                 healingReduction: healRed 
+                 healingReduction: healRed
             });
             tower.burstCount++;
             if (tower.burstCount >= FLAME_BURST_SHOTS) {
@@ -1489,8 +1492,8 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
                  endX: predX, endY: predY, // Targeted Location
                  velocity: { x: 0, y: 0 }, 
                  speed: speed, damage: effectiveDamage,
-                 color: '#71717a', radius: 6, type: 'MORTAR_SHELL', 
-                 pierce: 0, lifespan: 120, splashRadius: 100,
+                 color: '#71717a', radius: 6, type: 'MORTAR_SHELL',
+                 pierce: 0, lifespan: getTravelLifespan(effectiveRange, 4, 120), splashRadius: 100,
                  isExplosive: tower.level >= 7 // Napalm flag
             });
         }
@@ -1502,7 +1505,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
                  endX: target.x + (Math.random() * 20 - 10), endY: target.y + (Math.random() * 20 - 10),
                  velocity: { x: Math.cos(angle) * 6, y: Math.sin(angle) * 6 }, 
                  speed: 6, damage: effectiveDamage,
-                 color: tower.level >= 7 ? '#14532d' : '#bef264', radius: 6, type: 'GLUE_BOMB', pierce: 1, lifespan: 60
+                 color: tower.level >= 7 ? '#14532d' : '#bef264', radius: 6, type: 'GLUE_BOMB', pierce: 1, lifespan: getTravelLifespan(effectiveRange, 6, 60)
             });
         }
         else if (tower.type === TowerType.LASER) {
@@ -1572,7 +1575,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
               velocity: { x: Math.cos(angle) * speed, y: Math.sin(angle) * speed },
               speed: speed, damage: effectiveDamage,
               color: tower.type === TowerType.TURRET && tower.level >= 7 && (tower.rampUpMultiplier||1) > 1.2 ? '#ef4444' : '#ffff00',
-              radius: 3, type: 'BULLET', pierce: tower.type === TowerType.SNIPER && tower.level >= 7 ? 3 : 1, lifespan: 60,
+              radius: 3, type: 'BULLET', pierce: tower.type === TowerType.SNIPER && tower.level >= 7 ? 3 : 1, lifespan: getTravelLifespan(effectiveRange, speed, 60),
               isExplosive: tower.type === TowerType.SURVIVOR && tower.level >= 7,
               isHoming: tower.isBuffed 
             });

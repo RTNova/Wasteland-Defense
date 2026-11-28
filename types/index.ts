@@ -139,6 +139,7 @@ export interface Projectile {
   type: 'BULLET' | 'FLAME' | 'LASER' | 'MISSILE' | 'ARROW' | 'BEAM' | 'LIGHTNING' | 'GLUE_BOMB' | 'MORTAR_SHELL' | 'ICE_BOLT';
   pierce: number; // How many enemies it can hit
   lifespan: number; // Frames to live
+  maxLifespan?: number; // Initial lifespan, for fade-out rendering scaled to actual travel distance
   
   // Special properties
   isHoming?: boolean; // Granted by Radar buff

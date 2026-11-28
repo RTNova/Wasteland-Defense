@@ -1127,7 +1127,7 @@ export const drawProjectile = ({ ctx, frame }: DrawContext, p: Projectile, enemi
              
          } else {
              // Standard Flame
-             ctx.fillStyle = `rgba(255, 85, 0, ${p.lifespan / 30})`;
+             ctx.fillStyle = `rgba(255, 85, 0, ${p.lifespan / (p.maxLifespan ?? 30)})`;
              ctx.beginPath();
              ctx.arc(0, 0, p.radius, 0, Math.PI*2);
              ctx.fill();
