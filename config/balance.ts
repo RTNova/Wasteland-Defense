@@ -51,13 +51,16 @@ export const getRewardMultiplier = (waveNum: number, isEndless: boolean): number
 export const FLAME_MAX_TARGETS = 3; // enemigos que puede golpear una misma llama (antes 99)
 export const FLAME_UPGRADE_DAMAGE_MULT = 1.25; // por nivel, además del +5% general (antes 1.45)
 export const FLAME_UPGRADE_COOLDOWN_MULT = 0.95; // por nivel (antes 0.9)
-export const FLAME_BURST_SHOTS = 10; // llamas por ráfaga
+export const FLAME_BURST_SHOTS = 10; // disparos por ráfaga
 export const FLAME_BURST_PAUSE_FRAMES = 30; // pausa tras cada ráfaga
+export const FLAME_STREAMS = 2; // llamas por disparo: chorro más denso
+export const FLAME_STREAM_DAMAGE_MULT = 0.6; // daño de cada llama (2 x 0,6 = 1,2x por disparo)
+export const FLAME_SPREAD = 0.35; // cono fijo en radianes: cerrado y preciso, sin ir en línea recta
 
-/** DPS real del Incinerator contra un objetivo, contando la pausa entre ráfagas. */
+/** DPS real del Incinerator contra un objetivo, contando los chorros y la pausa entre ráfagas. */
 export const flameRealDps = (damage: number, cooldownFrames: number): number => {
   const cycleFrames = FLAME_BURST_SHOTS * cooldownFrames + FLAME_BURST_PAUSE_FRAMES;
-  return (damage * FLAME_BURST_SHOTS * FRAMES_PER_SECOND) / cycleFrames;
+  return (damage * FLAME_STREAM_DAMAGE_MULT * FLAME_STREAMS * FLAME_BURST_SHOTS * FRAMES_PER_SECOND) / cycleFrames;
 };
 
 /** Segundos que tarda un Incinerator en limpiar `count` enemigos juntos de `hp` de vida cada uno. */
@@ -82,17 +85,6 @@ export interface UpgradableStats {
 export const getTravelLifespan = (rangePx: number, speedPxPerFrame: number, minLifespan: number): number =>
   Math.max(minLifespan, Math.ceil(rangePx / speedPxPerFrame) + 5);
 
-/**
- * Cono del Incinerator: con el alcance base (150) la dispersión es 0,4 rad y a mayor alcance
- * la llama se abre más, hasta 0,7 rad. Así la rama "Alcance largo" (y el buff del Command Link)
- * se ven en pantalla: el cono llega más lejos y cubre más ancho.
- */
-export const getFlameSpread = (rangePx: number): number =>
-  0.4 + Math.min(0.3, Math.max(0, (rangePx - 150) / 150) * 0.3);
-
-/** Radio de cada partícula de llama: crece un 30% al pasar del alcance base al doble. */
-export const getFlameRadius = (rangePx: number): number =>
-  5 * (1 + Math.max(0, (rangePx - 150) / 150) * 0.3);
 
 /**
  * Estadísticas tras subir un nivel. Flamethrower y Shockwave ganan más daño y cadencia, sin alcance.

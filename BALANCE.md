@@ -245,7 +245,7 @@ Motivo: las mejoras de alcance no siempre se traducían en alcance real. La vida
 
 | Qué | Antes | Ahora |
 |---|---|---|
-| Incinerator | Llamas clavadas en 150 px (30 frames x 5) aunque el alcance subiera | Las llamas viven lo necesario para cubrir el alcance real y el cono se abre más: dispersión 0,4 a 0,7 rad y radio 5 a 6,5 px |
+| Incinerator | Llamas clavadas en 150 px (30 frames x 5) aunque el alcance subiera | Las llamas viven lo necesario para cubrir el alcance real. Cono cerrado y fijo (0,35 rad) con 2 chorros por disparo (daño x0,6 cada uno: 1,2x total); la primera versión abría el cono con el alcance (hasta 0,7 rad) y quedaba impreciso |
 | Balas (Scavenger, Ranger, Sentry) | Vida fija 60 frames = 480 px; el Ranger en L7 (581) y con Command Link (668) no llegaba | Vida = alcance / velocidad + 5 frames de margen |
 | Chemist (bomba) | 360 px fijos | Igual |
 | Earthshaker (obús) | 480 px fijos | Igual |

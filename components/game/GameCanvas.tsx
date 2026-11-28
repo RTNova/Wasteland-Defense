@@ -10,7 +10,7 @@ import { PostWaveSummaryModal, WaveSummaryData } from '../ui/PostWaveSummaryModa
 import { GameMenuModal } from '../ui/GameMenuModal';
 import { soundManager, SoundSettings } from '../../config/soundManager';
 import { getDifficultyConfig } from '../../config/difficulty';
-import { FLAME_MAX_TARGETS, FLAME_BURST_SHOTS, FLAME_BURST_PAUSE_FRAMES, getUpgradeCost, applyUpgradeStats, getWaveHpMultiplier, getRewardMultiplier, getStartingMoney, getTravelLifespan, getFlameSpread, getFlameRadius } from '../../config/balance';
+import { FLAME_MAX_TARGETS, FLAME_BURST_SHOTS, FLAME_BURST_PAUSE_FRAMES, FLAME_STREAMS, FLAME_STREAM_DAMAGE_MULT, FLAME_SPREAD, getUpgradeCost, applyUpgradeStats, getWaveHpMultiplier, getRewardMultiplier, getStartingMoney, getTravelLifespan } from '../../config/balance';
 import { getEndlessScaling } from '../../config/endlessScaling';
 import {
   DamageClass, DailyModifier, AbilityId, ABILITIES, BOMBARD_RADIUS, REPAIR_LIVES, SLOW_FRAMES, BOSS_SHIELD_FRACTION,
@@ -1409,25 +1409,27 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
         else if (tower.type === TowerType.FLAMETHROWER) {
             if (tower.burstCount === undefined) tower.burstCount = 0;
             tower.cooldownTimer = effectiveCooldown;
-            // El cono cubre el alcance real: las llamas viven lo que tardan en recorrerlo
-            // y se abren más cuanto mayor es (rama "Alcance largo", buff del Command Link).
-            const spread = getFlameSpread(effectiveRange);
-            const randomizedAngle = angle + (Math.random() * spread - spread/2);
+            // Cono cerrado y fijo (0,35 rad): las llamas viven lo que tardan en cubrir el
+            // alcance real y salen en varios chorros por disparo, denso y preciso.
             const flameLife = getTravelLifespan(effectiveRange, 5, 30);
+            const streamDamage = Math.max(1, Math.round(effectiveDamage * FLAME_STREAM_DAMAGE_MULT));
 
             // Healing Reduction Scaling
             const healRed = Math.min(0.9, 0.3 + ((tower.level - 1) * 0.1));
 
-            projectilesRef.current.push({
-                 id: Math.random().toString(), ownerId: tower.id, // Track owner for damage
-                 x: tower.x, y: tower.y, targetId: null,
-                 velocity: { x: Math.cos(randomizedAngle) * 5, y: Math.sin(randomizedAngle) * 5 },
-                 speed: 5, damage: effectiveDamage,
-                 color: tower.level >= 7 ? '#3b82f6' : '#ff5500',
-                 radius: getFlameRadius(effectiveRange), type: 'FLAME', pierce: FLAME_MAX_TARGETS, lifespan: flameLife, maxLifespan: flameLife, hitIds: [],
-                 isBlueFire: tower.level >= 7,
-                 healingReduction: healRed
-            });
+            for (let stream = 0; stream < FLAME_STREAMS; stream++) {
+                 const randomizedAngle = angle + (Math.random() * FLAME_SPREAD - FLAME_SPREAD/2);
+                 projectilesRef.current.push({
+                      id: Math.random().toString(), ownerId: tower.id, // Track owner for damage
+                      x: tower.x, y: tower.y, targetId: null,
+                      velocity: { x: Math.cos(randomizedAngle) * 5, y: Math.sin(randomizedAngle) * 5 },
+                      speed: 5, damage: streamDamage,
+                      color: tower.level >= 7 ? '#3b82f6' : '#ff5500',
+                      radius: 5, type: 'FLAME', pierce: FLAME_MAX_TARGETS, lifespan: flameLife, maxLifespan: flameLife, hitIds: [],
+                      isBlueFire: tower.level >= 7,
+                      healingReduction: healRed
+                 });
+            }
             tower.burstCount++;
             if (tower.burstCount >= FLAME_BURST_SHOTS) {
                 tower.cooldownTimer = FLAME_BURST_PAUSE_FRAMES / speedMult; 

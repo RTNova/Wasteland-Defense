@@ -15,8 +15,8 @@ import { TOWER_DEFINITIONS, ENEMY_STATS, MAPS, generateWaves, CANVAS_WIDTH, CANV
 import { getEndlessScaling } from '../config/endlessScaling';
 import { DIFFICULTY_CONFIGS } from '../config/difficulty';
 import {
-  applyUpgradeStats, FLAME_MAX_TARGETS, flameSecondsToClear, flameRealDps, getUpgradeCost, getWaveHpMultiplier, getRewardMultiplier, getStartingMoney, TOWER_MAX_LEVEL,
-  getTravelLifespan, getFlameSpread, getFlameRadius,
+  applyUpgradeStats, FLAME_MAX_TARGETS, FLAME_STREAMS, FLAME_STREAM_DAMAGE_MULT, FLAME_SPREAD, flameSecondsToClear, flameRealDps, getUpgradeCost, getWaveHpMultiplier, getRewardMultiplier, getStartingMoney, TOWER_MAX_LEVEL,
+  getTravelLifespan,
 } from '../config/balance';
 import { getBranches } from '../config/features';
 import { EnemyType, TowerType } from '../types/index';
@@ -85,12 +85,12 @@ describe('alcance real de los proyectiles', () => {
     expect(getTravelLifespan(330, 8, 60)).toBe(60); // Ranger L1: 330/8+5 = 47 -> mínimo 60
   });
 
-  it('el cono del Incinerator se abre al ganar alcance y el radio de la llama crece', () => {
-    expect(getFlameSpread(150)).toBeCloseTo(0.4); // alcance base: como antes
-    expect(getFlameSpread(187)).toBeGreaterThan(0.4); // rama "Alcance largo"
-    expect(getFlameSpread(9999)).toBeCloseTo(0.7); // tope
-    expect(getFlameRadius(150)).toBeCloseTo(5);
-    expect(getFlameRadius(300)).toBeCloseTo(6.5);
+  it('el cono del Incinerator es cerrado y fijo, y el chorro sale denso con el daño repartido', () => {
+    expect(FLAME_SPREAD).toBeLessThan(0.4); // más cerrado que el cono original
+    expect(FLAME_SPREAD).toBeGreaterThan(0.1); // sin llegar a ser una línea recta
+    expect(FLAME_STREAMS).toBeGreaterThanOrEqual(2); // varios chorros por disparo
+    expect(FLAME_STREAMS * FLAME_STREAM_DAMAGE_MULT).toBeLessThanOrEqual(1.25); // el reparto no dispara el DPS
+    expect(FLAME_STREAMS * FLAME_STREAM_DAMAGE_MULT).toBeGreaterThanOrEqual(1); // ni lo baja: el cono estrecho ya alcanza a menos enemigos
   });
 
   it('toda torre de fuego directo alcanza su alcance máximo real (L7 + rama + buff de Command Link)', () => {
