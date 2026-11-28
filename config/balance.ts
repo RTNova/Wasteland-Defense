@@ -73,6 +73,28 @@ export interface UpgradableStats {
 }
 
 /**
+ * Frames que debe vivir un proyectil para cubrir el alcance real de su torre (+5 de margen).
+ * Antes la vida era fija (60 balas, 30 llamas) y a niveles altos el alcance superaba lo que el
+ * proyectil podía recorrer: la torre apuntaba a enemigos que nunca llegaba a alcanzar
+ * (p. ej. Ranger con 581 de alcance y balas de 480 px, o el Incinerator con la rama
+ * "Alcance largo" y llamas clavadas en 150 px).
+ */
+export const getTravelLifespan = (rangePx: number, speedPxPerFrame: number, minLifespan: number): number =>
+  Math.max(minLifespan, Math.ceil(rangePx / speedPxPerFrame) + 5);
+
+/**
+ * Cono del Incinerator: con el alcance base (150) la dispersión es 0,4 rad y a mayor alcance
+ * la llama se abre más, hasta 0,7 rad. Así la rama "Alcance largo" (y el buff del Command Link)
+ * se ven en pantalla: el cono llega más lejos y cubre más ancho.
+ */
+export const getFlameSpread = (rangePx: number): number =>
+  0.4 + Math.min(0.3, Math.max(0, (rangePx - 150) / 150) * 0.3);
+
+/** Radio de cada partícula de llama: crece un 30% al pasar del alcance base al doble. */
+export const getFlameRadius = (rangePx: number): number =>
+  5 * (1 + Math.max(0, (rangePx - 150) / 150) * 0.3);
+
+/**
  * Estadísticas tras subir un nivel. Flamethrower y Shockwave ganan más daño y cadencia, sin alcance.
  * El resto gana 30% de daño y 10% de alcance. Todas ganan además 5% de daño.
  */
